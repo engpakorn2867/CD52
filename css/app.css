@@ -45,6 +45,10 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .seg button:first-child { border-radius: 6px 0 0 6px; }
 .seg button:last-child { border-radius: 0 6px 6px 0; }
 .seg button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.seg.views { margin: 8px 0 2px; flex-wrap: wrap; }
+.seg.views button { font-size: 12px; padding: 4px 6px; }
+.progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 4px 0; }
+.progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .chips button { padding: 2px 8px; font-size: 12px; border-radius: 12px; }
 .status { padding: 8px 10px; border-radius: 8px; margin: 6px 0; line-height: 1.5; }

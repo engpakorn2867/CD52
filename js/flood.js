@@ -222,6 +222,7 @@
     var chan = river.chan, cl = river.cl;
     var depth = new Float32Array(N);
     var wsCell = new Float32Array(N);
+    var excess = new Float32Array(N); // ความสูงที่น้ำเกินตลิ่ง ณ พิกเซลร่องน้ำที่ล้น
     var dist = new Uint16Array(N).fill(65535);
     var q = new Int32Array(N), qh = 0, qt = 0;
 
@@ -249,6 +250,7 @@
       var cross = c.dx * oy - c.dy * ox;
       var bank = cross < 0 ? clL[ci] : (cross > 0 ? clR[ci] : Math.min(clL[ci], clR[ci]));
       if (clWs[ci] > bank) {
+        excess[k] = clWs[ci] - bank;
         wsCell[k] = clWs[ci];
         dist[k] = 0;
         q[qt++] = k;
@@ -304,7 +306,7 @@
     }
 
     return {
-      depth: pred, envelope: envelope, ws: wsCell, dist: dist, chan: chan,
+      depth: pred, envelope: envelope, ws: wsCell, dist: dist, chan: chan, excess: excess,
       stats: computeStats(grid, pred, dist),
       envelopeStats: computeStats(grid, envelope, dist),
       volumeUsedM3: volUsed, volumeLimited: pred !== envelope, limitSteps: limitSteps,
