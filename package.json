@@ -1,0 +1,18 @@
+{
+  "name": "maeklong-flood-map",
+  "version": "1.0.0",
+  "description": "แผนที่ดาวเทียมคาดการณ์พื้นที่น้ำล้นตลิ่งแม่น้ำแม่กลอง จ.ราชบุรี (เกณฑ์หลักสถานี K.55A บ้านโป่ง)",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "scenarios": "node tools/scenarios.js"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>แผนที่คาดการณ์น้ำล้นตลิ่งแม่กลอง ราชบุรี</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="panel">
+      <header>
+        <h1>คาดการณ์น้ำล้นตลิ่ง แม่น้ำแม่กลอง</h1>
+        <p class="sub">จ.ราชบุรี · เกณฑ์หลักสถานี <b>K.55A</b> สะพานรถยนต์ค่ายหลวง อ.บ้านโป่ง</p>
+      </header>
+
+      <section>
+        <h2>1. ระดับน้ำที่สถานี K.55A</h2>
+        <div class="seg" role="tablist">
+          <button type="button" data-mode="q" class="active">ปริมาณน้ำ (ลบ.ม./วินาที)</button>
+          <button type="button" data-mode="h">ระดับน้ำ (ม.รทก.)</button>
+        </div>
+        <div class="row">
+          <input id="valueRange" type="range" min="2500" max="4000" step="10" value="3000">
+          <input id="valueInput" type="number" step="10" value="3000">
+        </div>
+        <div class="chips" id="curveChips"></div>
+        <div id="k55Status" class="status"></div>
+        <svg id="xsec" viewBox="0 0 320 150" aria-label="รูปตัดลำน้ำ K.55A"></svg>
+      </section>
+
+      <section>
+        <h2>2. ข้อมูลล่าสุดจาก ThaiWater</h2>
+        <div class="row">
+          <button type="button" id="btnFetch" class="primary">ดึงข้อมูลระดับน้ำล่าสุด</button>
+          <label class="check"><input type="checkbox" id="useStations" checked> ใช้สถานีอื่นในราชบุรีร่วมคำนวณ</label>
+        </div>
+        <div id="twStatus" class="muted small"></div>
+        <details id="pasteBox">
+          <summary>ดึงไม่ได้? วาง JSON จาก thaiwater.net เอง</summary>
+          <p class="small muted">เปิด <code>https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load</code> ในเบราว์เซอร์ คัดลอกทั้งหมดมาวางที่นี่</p>
+          <textarea id="pasteJson" rows="4" placeholder='{"waterlevel_data": {...}}'></textarea>
+          <button type="button" id="btnPaste">ใช้ข้อมูลนี้</button>
+        </details>
+        <div id="newsFeed"></div>
+      </section>
+
+      <section>
+        <h2>3. ผลคาดการณ์พื้นที่น้ำท่วม</h2>
+        <div id="simStatus" class="muted small">กำลังเตรียมข้อมูลความสูงภูมิประเทศ…</div>
+        <div id="results"></div>
+        <div class="row anim">
+          <button type="button" id="btnPlay" title="แสดงการแพร่กระจายของน้ำจากลำน้ำ">▶ แพร่กระจาย</button>
+          <input id="spreadRange" type="range" min="0" max="100" value="100">
+          <span id="spreadLabel" class="small"></span>
+        </div>
+        <h3>ชุมชนที่คาดว่าได้รับผลกระทบ</h3>
+        <ol id="placeList" class="places"></ol>
+      </section>
+
+      <section>
+        <details>
+          <summary><b>ตั้งค่าแบบจำลอง</b></summary>
+          <label class="check"><input type="checkbox" id="pVolume"> จำกัดพื้นที่ท่วมตามปริมาตรน้ำที่ล้นตลิ่ง</label>
+          <label>ระยะเวลาน้ำล้นตลิ่ง (ชั่วโมง) <input id="pHours" type="number" step="6" min="1"></label>
+          <label>ความลาดชันผิวน้ำ (ม./กม.) <input id="pSlope" type="number" step="0.01"></label>
+          <label>น้ำหนักความสูงตลิ่งเฉพาะที่จาก DEM (0–1) <input id="pBankW" type="number" step="0.1" min="0" max="1"></label>
+          <label>ปรับแก้ DEM (ม., ลบออกจากความสูงดาวเทียม) <input id="pOffset" type="number" step="0.1"></label>
+          <label>ระยะแพร่กระจายสูงสุด (กม.) <input id="pSpread" type="number" step="1" min="1" max="40"></label>
+          <label>ครึ่งความกว้างลำน้ำ (ม.) <input id="pChannel" type="number" step="10" min="30"></label>
+          <label>ความเสียหายเฉลี่ย (บาท/ไร่) <input id="pDamage" type="number" step="10"></label>
+          <label>ความละเอียด DEM
+            <select id="pZoom"><option value="12">ปกติ (~37 ม.)</option><option value="13">ละเอียด (~18 ม.)</option></select>
+          </label>
+          <label>ตลิ่งซ้าย K.55A (ม.รทก.) <input id="pLeft" type="number" step="0.01"></label>
+          <label>ตลิ่งขวา K.55A (ม.รทก.) <input id="pRight" type="number" step="0.01"></label>
+        </details>
+      </section>
+
+      <footer class="small muted">
+        <p><b>หมายเหตุ:</b> เป็นการประเมินขอบเขตเสี่ยงแบบ “อ่างน้ำเชื่อมต่อ” จากความสูงภูมิประเทศดาวเทียม (DEM ~30 ม.)
+          ไม่คิดปริมาตรน้ำ เวลา และคันกั้นน้ำขนาดเล็ก ผลจึงเป็นกรอบเสี่ยงสูงสุด ใช้ประกอบการเฝ้าระวังเท่านั้น
+          ให้ยึดประกาศของกรมชลประทาน/ปภ./จังหวัดเป็นหลัก</p>
+        <p>ข้อมูล: Rating Curve K.55A (ศูนย์อุทกวิทยาชลประทานภาคตะวันตก), คลังข้อมูลน้ำแห่งชาติ thaiwater.net,
+          AWS Terrain Tiles (SRTM ฯลฯ), ภาพดาวเทียม Esri World Imagery, OpenStreetMap, Natural Earth</p>
+      </footer>
+    </aside>
+    <main id="map"></main>
+  </div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/config.js"></script>
+  <script src="data/maeklong-river.js"></script>
+  <script src="js/rating.js"></script>
+  <script src="js/flood.js"></script>
+  <script src="js/dem.js"></script>
+  <script src="js/thaiwater.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
