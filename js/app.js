@@ -1,13 +1,19 @@
 // ส่วนติดต่อผู้ใช้: แผนที่ดาวเทียม + การคำนวณน้ำล้นตลิ่ง + ข้อมูล ThaiWater
 (function () {
   'use strict';
-  var CFG = window.FLOOD_CONFIG, M = window.FloodModel, R = window.Rating, TW = window.ThaiWater, HY = window.Hydro;
+  var CFG = window.FLOOD_CONFIG, M = window.FloodModel, R = window.Rating, TW = window.ThaiWater, HY = window.Hydro, FC = window.Forecast;
   var PS = CFG.primaryStation, P = Object.assign({}, CFG.params);
 
+  var FCP = Object.assign({}, CFG.forecast, FC.PRESETS[CFG.forecast.preset || 'mid']);
+  FCP.obs = Object.assign({}, CFG.forecast.obs);
   var state = {
-    mode: 'q',           // 'q' ปริมาณน้ำ, 'h' ระดับน้ำ
-    q: 3000,
-    h: R.levelFromDischarge(PS.ratingCurve, 3000),
+    scn: 'forecast',     // 'forecast' คาดการณ์ตามเวลา, 'manual' กำหนดเอง (คงที่)
+    fc: null,            // ผลคาดการณ์ (Forecast.build)
+    selTime: null,       // เวลาที่เลือกดูบนแผนที่/กราฟ (ms) — null = ค่าสูงสุดตลอดช่วง
+    simStart: null,      // เวลาเริ่มจำลองการไหล (ms) ในโหมดคาดการณ์
+    mode: 'h',           // 'q' ปริมาณน้ำ, 'h' ระดับน้ำ (โหมดกำหนดเอง)
+    q: R.dischargeFromLevel(PS.ratingCurve, CFG.forecast.obs.h),
+    h: CFG.forecast.obs.h,
     riverLine: window.MAEKLONG_RIVER.slice(),
     riverSource: 'เส้นลำน้ำจาก DEM (สำรอง)',
     grid: null, gridZoom: null, river: null, result: null,
@@ -75,19 +81,197 @@
   });
 
   // ---------------- สถานะ K.55A ----------------
-  function currentH() { return state.mode === 'q' ? R.levelFromDischarge(PS.ratingCurve, state.q) : state.h; }
-  function currentQ() { return state.mode === 'q' ? state.q : R.dischargeFromLevel(PS.ratingCurve, state.h); }
+  // ระดับที่ใช้คำนวณขอบเขตน้ำท่วม: โหมดคาดการณ์ = ยอดน้ำตลอดช่วง, โหมดกำหนดเอง = ค่าที่ป้อน
+  function currentH() {
+    if (state.scn === 'forecast' && state.fc) return state.fc.peak.h;
+    return state.mode === 'q' ? R.levelFromDischarge(PS.ratingCurve, state.q) : state.h;
+  }
+  function currentQ() { return R.dischargeFromLevel(PS.ratingCurve, currentH()); }
+
+  // ---------------- เวลา (เวลาประเทศไทย) ----------------
+  var TZ = 'Asia/Bangkok';
+  function fmtTime(t, opt) {
+    if (t == null || !isFinite(t)) return '–';
+    return new Date(t).toLocaleString('th-TH', Object.assign({ timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }, opt || {})) + ' น.';
+  }
+  function toLocalInput(t) { return new Date(t + 7 * 3600000).toISOString().slice(0, 16); }
+  function fromLocalInput(v) { return Date.parse(v + ':00+07:00'); }
+  function parseStationTime(str) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(str || ''));
+    return m ? Date.parse(m[1] + '-' + m[2] + '-' + m[3] + 'T' + m[4] + ':' + m[5] + ':00+07:00') : NaN;
+  }
+
+  // ---------------- คาดการณ์ระดับน้ำตามเวลา ----------------
+  function rebuildForecast() {
+    state.fc = FC.build(Object.assign({}, FCP, { bank: PS.bank, ratingCurve: PS.ratingCurve }));
+    renderForecastChart();
+    renderForecastTable();
+  }
+  function fillForecastInputs() {
+    $('fcTime').value = toLocalInput(typeof FCP.obs.time === 'number' ? FCP.obs.time : Date.parse(FCP.obs.time));
+    $('fcLevel').value = FCP.obs.h;
+    $('fcRate').value = FCP.riseRate;
+    $('fcPeakAfter').value = FCP.peakAfterH;
+    $('fcShape').value = FCP.riseShape;
+    $('fcHold').value = FCP.holdH;
+    $('fcFall').value = FCP.fallRate;
+    $('fcHorizon').value = FCP.horizonH;
+    var key = Object.keys(FC.PRESETS).filter(function (k) {
+      var p = FC.PRESETS[k];
+      return p.riseShape === FCP.riseShape && p.peakAfterH === FCP.peakAfterH && p.holdH === FCP.holdH && p.fallRate === FCP.fallRate;
+    })[0];
+    document.querySelectorAll('#presetSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.preset === key); });
+    $('presetDesc').textContent = key ? FC.PRESETS[key].desc : 'กำหนดสมมติฐานเอง';
+  }
+  function forecastChanged() {
+    rebuildForecast();
+    renderStatus();
+    scheduleSim();
+  }
+
+  // กราฟระดับน้ำตามเวลา (แกนเดียว: ม.รทก.; Q แสดงในป้ายเมื่อชี้)
+  var chartGeom = null;
+  function renderForecastChart() {
+    var f = state.fc, svg = $('fcChart');
+    if (!f) return;
+    var W = 360, H = 200, ml = 32, mr = 10, mt = 12, mb = 28;
+    var t0 = Math.min(f.start != null ? f.start : f.obs.t, f.obs.t), t1 = f.end;
+    var ser = f.series(15, t0, t1);
+    var hs = ser.map(function (p) { return p.h; });
+    var hmin = Math.floor(Math.min(PS.bank - 0.5, Math.min.apply(null, hs)) * 2) / 2;
+    var hmax = Math.ceil((Math.max(PS.bank, Math.max.apply(null, hs)) + 0.3) * 2) / 2;
+    function x(t) { return ml + (t - t0) / (t1 - t0) * (W - ml - mr); }
+    function y(h) { return mt + (hmax - h) / (hmax - hmin) * (H - mt - mb); }
+    chartGeom = { x: x, y: y, t0: t0, t1: t1, ml: ml, mr: mr, W: W, H: H, mt: mt, mb: mb };
+    var o = [];
+    // พื้นที่เหนือตลิ่ง
+    o.push('<rect class="over" x="' + ml + '" y="' + mt + '" width="' + (W - ml - mr) + '" height="' + Math.max(0, y(PS.bank) - mt) + '"/>');
+    // เส้นกริด/แกน y
+    var stepY = hmax - hmin > 4 ? 1 : 0.5;
+    for (var v = Math.ceil(hmin / stepY) * stepY; v <= hmax + 1e-9; v += stepY) {
+      o.push('<line class="grid" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+        '<text class="tick" x="' + (ml - 4) + '" y="' + (y(v) + 3) + '" text-anchor="end">' + v.toFixed(stepY < 1 ? 1 : 0) + '</text>');
+    }
+    // แกน x: เที่ยงคืน (เส้น) + เที่ยงวัน (ขีด)
+    var day0 = Date.parse(new Date(t0 + 7 * 3600000).toISOString().slice(0, 10) + 'T00:00:00+07:00');
+    for (var d = day0; d <= t1; d += 12 * 3600000) {
+      if (d < t0) continue;
+      var midnight = ((d - day0) / 3600000) % 24 === 0;
+      o.push('<line class="grid" x1="' + x(d) + '" x2="' + x(d) + '" y1="' + mt + '" y2="' + (H - mb) + '"' + (midnight ? '' : ' stroke-dasharray="1 3"') + '/>');
+      if (midnight) o.push('<text class="tick" x="' + (x(d) + 2) + '" y="' + (H - mb + 11) + '">' +
+        new Date(d).toLocaleDateString('th-TH', { timeZone: TZ, day: 'numeric', month: 'short' }) + '</text>');
+    }
+    o.push('<line class="axis" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + (H - mb) + '" y2="' + (H - mb) + '"/>');
+    o.push('<text class="tick" x="' + ml + '" y="' + (H - 4) + '">ม.รทก. · เส้นทึบ = ค่าจริง/ตารางคาดการณ์ · เส้นประ = สมมติฐาน</text>');
+    // ตลิ่ง
+    o.push('<line class="bankline" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + y(PS.bank) + '" y2="' + y(PS.bank) + '"/>' +
+      '<text class="lbl" x="' + (W - mr - 2) + '" y="' + (y(PS.bank) + 11) + '" text-anchor="end">ตลิ่ง ' + PS.bank.toFixed(2) + ' ม.</text>');
+    // เส้นระดับน้ำ: ทึบถึงจุดคาดการณ์สุดท้าย ประหลังจากนั้น
+    function path(pts) { return pts.map(function (p, i) { return (i ? 'L' : 'M') + x(p.t).toFixed(1) + ',' + y(p.h).toFixed(1); }).join(''); }
+    var solid = ser.filter(function (p) { return p.t <= f.last.t; });
+    solid.push({ t: f.last.t, h: f.hAt(f.last.t) });
+    var model = [{ t: f.last.t, h: f.hAt(f.last.t) }].concat(ser.filter(function (p) { return p.t > f.last.t; }));
+    o.push('<path class="series" d="' + path(solid) + '"/>');
+    if (model.length > 1) o.push('<path class="series model" d="' + path(model) + '"/>');
+    // ค่าล่าสุด
+    o.push('<line class="nowline" x1="' + x(f.obs.t) + '" x2="' + x(f.obs.t) + '" y1="' + mt + '" y2="' + (H - mb) + '"/>' +
+      '<text class="tick" x="' + (x(f.obs.t) + 3) + '" y="' + (mt + 8) + '">ล่าสุด</text>');
+    f.known.forEach(function (p) {
+      o.push('<circle class="pt" cx="' + x(p.t) + '" cy="' + y(p.h) + '" r="' + (p.kind === 'obs' ? 4.5 : 3) + '"/>');
+    });
+    // ยอดน้ำ
+    var px = x(f.peak.t), py = y(f.peak.h), anchor = px > W - 110 ? 'end' : 'start';
+    o.push('<circle class="pt" cx="' + px + '" cy="' + py + '" r="4"/>' +
+      '<text class="lbl" x="' + (px + (anchor === 'end' ? -6 : 6)) + '" y="' + (py - mt < 14 ? py + 14 : py - 5) + '" text-anchor="' + anchor + '">ยอด ' +
+      f.peak.h.toFixed(2) + ' ม. · ' + fmtTime(f.peak.t) + '</text>');
+    // เวลาที่เลือกบนแผนที่
+    if (state.selTime != null && state.selTime >= t0 && state.selTime <= t1) {
+      o.push('<line class="selline" x1="' + x(state.selTime) + '" x2="' + x(state.selTime) + '" y1="' + mt + '" y2="' + (H - mb) + '"/>');
+    }
+    o.push('<g id="fcCross" visibility="hidden"><line class="cross" y1="' + mt + '" y2="' + (H - mb) + '"/><circle class="pt" r="4"/></g>');
+    svg.innerHTML = o.join('');
+  }
+
+  function chartTimeAt(ev) {
+    var g = chartGeom, svg = $('fcChart');
+    if (!g) return null;
+    var r = svg.getBoundingClientRect();
+    var sx = (ev.clientX - r.left) / r.width * g.W;
+    if (sx < g.ml || sx > g.W - g.mr) return null;
+    return g.t0 + (sx - g.ml) / (g.W - g.ml - g.mr) * (g.t1 - g.t0);
+  }
+  function statusText(h) {
+    var ex = h - PS.bank;
+    return ex > 0 ? 'ล้นตลิ่ง ' + ex.toFixed(2) + ' ม.' : 'ต่ำกว่าตลิ่ง ' + (-ex).toFixed(2) + ' ม.';
+  }
+  function onChartMove(ev) {
+    var t = chartTimeAt(ev), f = state.fc, g = chartGeom, tip = $('fcTip'), cross = $('fcCross');
+    if (t == null || !f) { tip.hidden = true; if (cross) cross.setAttribute('visibility', 'hidden'); return; }
+    var h = f.hAt(t), q = f.qAt(t);
+    cross.setAttribute('visibility', 'visible');
+    cross.firstChild.setAttribute('x1', g.x(t)); cross.firstChild.setAttribute('x2', g.x(t));
+    cross.lastChild.setAttribute('cx', g.x(t)); cross.lastChild.setAttribute('cy', g.y(h));
+    tip.hidden = false;
+    tip.innerHTML = '<b>' + fmtTime(t) + '</b><br>ระดับ ' + h.toFixed(2) + ' ม.รทก. · ' + statusText(h) +
+      '<br>Q ≈ ' + fmt(q) + ' ลบ.ม./วินาที' + (q > PS.bankfullQ ? ' (เกินความจุ ' + fmt(q - bankfullQ()) + ')' : '') +
+      (t > f.last.t ? '<br><span class="muted">ช่วงสมมติฐาน</span>' : '') +
+      (state.hsum && state.simStart != null ? '<br><span class="muted">คลิกเพื่อดูแผนที่ ณ เวลานี้</span>' : '');
+    var wrap = $('fcChart').getBoundingClientRect(), left = ev.clientX - wrap.left + 10;
+    if (left > wrap.width - 170) left = ev.clientX - wrap.left - 170;
+    tip.style.left = Math.max(0, left) + 'px';
+    tip.style.top = Math.max(0, ev.clientY - wrap.top - 50) + 'px';
+  }
+  function onChartClick(ev) {
+    var t = chartTimeAt(ev);
+    if (t == null || !state.hsum || state.simStart == null) return;
+    var n = state.hydro.snapshots.length;
+    var best = 0, bd = Infinity;
+    for (var i = 0; i < n; i++) {
+      var dd = Math.abs(state.simStart + state.hydro.snapshots[i].t * 1000 - t);
+      if (dd < bd) { bd = dd; best = i; }
+    }
+    state.timeIdx = best;
+    $('spreadRange').value = best;
+    onTimeChanged();
+  }
+
+  function renderForecastTable() {
+    var f = state.fc;
+    if (!f) return;
+    var rows = f.series(180, Math.ceil(f.obs.t / 3600000) * 3600000, f.end);
+    var html = '';
+    if (f.milestones.length) {
+      html += '<p class="small"><b>ระดับน้ำจะถึง</b> ' + f.milestones.map(function (m) {
+        return m.h.toFixed(2) + ' ม. ' + fmtTime(m.t);
+      }).join(' · ') + '</p>';
+    }
+    html += '<table><tr><th>เวลา</th><th>ระดับ (ม.รทก.)</th><th>เทียบตลิ่ง (ม.)</th><th>Q (ลบ.ม./วิ)</th><th>เกินความจุ</th></tr>';
+    rows.forEach(function (r) {
+      var ex = r.h - PS.bank, cls = Math.abs(r.t - f.peak.t) < 90 * 60000 ? 'peak' : '';
+      html += '<tr class="' + cls + '"><td>' + fmtTime(r.t) + '</td><td>' + r.h.toFixed(2) + '</td><td>' + (ex > 0 ? '+' : '') + ex.toFixed(2) +
+        '</td><td>' + fmt(r.q) + '</td><td>' + (r.q > bankfullQ() ? fmt(r.q - bankfullQ()) : '–') + '</td></tr>';
+    });
+    $('fcTable').innerHTML = html + '</table>';
+  }
+
+  function setScenario(scn) {
+    state.scn = scn;
+    document.querySelectorAll('#scnSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.scn === scn); });
+    $('fcBox').hidden = scn !== 'forecast';
+    $('manualBox').hidden = scn !== 'manual';
+    renderStatus(); scheduleSim();
+  }
 
   function setMode(mode) {
     state.mode = mode;
-    document.querySelectorAll('.seg button').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === mode); });
+    document.querySelectorAll('#modeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === mode); });
     var r = $('valueRange'), i = $('valueInput');
     if (mode === 'q') {
-      r.min = 2000; r.max = 4200; r.step = 10; i.step = 10;
+      r.min = 1000; r.max = 4200; r.step = 10; i.step = 10;
       state.q = Math.round(currentQFromH(state.h));
       r.value = i.value = state.q;
     } else {
-      r.min = 9; r.max = 14; r.step = 0.01; i.step = 0.01;
+      r.min = 7; r.max = 14; r.step = 0.01; i.step = 0.01;
       r.value = i.value = state.h.toFixed(2);
     }
     renderStatus(); scheduleSim();
@@ -120,30 +304,49 @@
   }
 
   function renderStatus() {
+    var el = $('k55Status');
+    $('bankInfo').innerHTML = 'ระดับตลิ่ง <b>' + PS.bank.toFixed(2) + ' ม.รทก.</b> ทั้งสองฝั่ง · รองรับน้ำได้ <b>' + fmt(bankfullQ()) + '</b> ลบ.ม./วินาที';
+    if (state.scn === 'forecast' && state.fc) {
+      var f = state.fc, oq = f.qAt(f.obs.t), maxRating = PS.ratingCurve[PS.ratingCurve.length - 1][1];
+      var lvl = f.obs.h > PS.bank ? 2 : (f.peak.h > PS.bank ? 1 : 0);
+      el.className = 'status l' + lvl;
+      el.innerHTML = 'ล่าสุด ' + fmtTime(f.obs.t) + ': <b class="big">' + f.obs.h.toFixed(2) + ' ม.รทก.</b><br>' +
+        '<b>' + statusText(f.obs.h) + '</b> · Q ≈ ' + fmt(oq) + ' ลบ.ม./วินาที' +
+        (oq > bankfullQ() ? ' (เกินความจุ ' + fmt(oq - bankfullQ()) + ')' : '') + '<br>' +
+        'คาดสูงสุด <b>' + f.peak.h.toFixed(2) + ' ม.</b> (Q ≈ ' + fmt(f.peak.q) + ') ' + fmtTime(f.peak.t) + '<br>' +
+        (f.start != null ? 'น้ำเริ่มล้นตลิ่ง ~' + fmtTime(f.start) + ' · ' : '') +
+        (f.recede != null ? 'ลดต่ำกว่าตลิ่ง ~' + fmtTime(f.recede) : (f.peak.h > PS.bank ? 'ยังไม่ลดต่ำกว่าตลิ่งภายใน ' + fmtTime(f.end) : '')) +
+        (f.peak.h > maxRating ? '<br><span class="small">⚠ ยอดน้ำสูงกว่าช่วง rating curve (' + maxRating.toFixed(2) + ' ม.) ค่า Q ช่วงนั้นเป็นการต่อเส้นตรง</span>' : '');
+      var hSel = state.selTime != null ? f.hAt(state.selTime) : f.obs.h;
+      drawCrossSection(hSel, state.selTime != null ? fmtTime(state.selTime) : 'ล่าสุด');
+      return;
+    }
     var h = currentH(), q = currentQ();
     var st = R.bankStatus(h, PS.leftBank, PS.rightBank);
-    var el = $('k55Status');
     el.className = 'status l' + st.level;
     var extra = st.level === 0
-      ? 'ต่ำกว่าตลิ่งต่ำสุด <b>' + fmt(st.freeboard, 2) + ' ม.</b> · รับน้ำเพิ่มได้อีกประมาณ <b>' +
-        fmt(R.dischargeFromLevel(PS.ratingCurve, Math.min(PS.leftBank, PS.rightBank)) - q) + '</b> ลบ.ม./วินาที'
-      : 'สูงกว่าตลิ่งซ้าย <b>' + fmt(h - PS.leftBank, 2) + ' ม.</b> · ตลิ่งขวา <b>' + fmt(h - PS.rightBank, 2) + ' ม.</b>';
+      ? 'ต่ำกว่าตลิ่ง <b>' + fmt(st.freeboard, 2) + ' ม.</b> · รับน้ำเพิ่มได้อีกประมาณ <b>' + fmt(bankfullQ() - q) + '</b> ลบ.ม./วินาที'
+      : 'สูงกว่าตลิ่ง <b>' + fmt(h - PS.bank, 2) + ' ม.</b> · เกินความจุ <b>' + fmt(q - bankfullQ()) + '</b> ลบ.ม./วินาที';
     el.innerHTML = '<b class="big">' + h.toFixed(2) + ' ม.รทก.</b> · Q ≈ ' + fmt(q) + ' ลบ.ม./วินาที<br>' +
       '<b>' + st.label + '</b> — ' + extra;
     drawCrossSection(h);
   }
 
   // รูปตัดลำน้ำอย่างง่าย (อิงภาพจาก สำนักงานชลประทานที่ 13)
-  function drawCrossSection(h) {
+  function drawCrossSection(h, when) {
     var svg = $('xsec');
-    var W = 320, H = 150, top = 10.6, bottom = 13.2;
+    var W = 320, H = 150, top = PS.bank - 1.5, bottom = Math.max(PS.bank + 4, h + 0.5);
     function y(v) { return 12 + (bottom - v) / (bottom - top) * (H - 40); }
     var yl = y(PS.leftBank), yr = y(PS.rightBank), yw = y(Math.max(top, Math.min(bottom, h)));
     var bed = H - 8;
     var parts = [];
     // ระดับตาม rating curve
+    var lastY = -99;
     PS.ratingCurve.forEach(function (p) {
+      if (p[1] < top || p[1] > bottom) return;
       var yy = y(p[1]);
+      if (Math.abs(yy - lastY) < 9) return; // ไม่ให้ป้ายซ้อนกัน
+      lastY = yy;
       parts.push('<line x1="40" x2="280" y1="' + yy + '" y2="' + yy + '" stroke="#7a8fb3" stroke-dasharray="4 3" stroke-width="0.7"/>' +
         '<text x="282" y="' + (yy + 3) + '" font-size="7" fill="#51607a">' + fmt(p[0]) + '</text>');
     });
@@ -158,10 +361,10 @@
       ' L320,' + H + ' L0,' + H + ' Z" fill="#8d6e4a" opacity="0.85"/>');
     if (over) parts.push('<path d="' + waterPath + '" fill="rgba(214,40,40,0.25)"/>');
     parts.push('<line x1="0" x2="320" y1="' + yw + '" y2="' + yw + '" stroke="' + (over ? '#c62828' : '#1565c0') + '" stroke-width="1.6"/>');
-    parts.push('<text x="4" y="' + (yl + 12) + '" font-size="9" fill="#fff">ตลิ่งซ้าย ' + PS.leftBank.toFixed(2) + '</text>');
-    parts.push('<text x="316" y="' + (yr + 12) + '" font-size="9" fill="#fff" text-anchor="end">ตลิ่งขวา ' + PS.rightBank.toFixed(2) + '</text>');
+    parts.push('<text x="4" y="' + (yl + 12) + '" font-size="9" fill="#fff">ตลิ่ง ' + PS.leftBank.toFixed(2) + '</text>');
+    parts.push('<text x="316" y="' + (yr + 12) + '" font-size="9" fill="#fff" text-anchor="end">ตลิ่ง ' + PS.rightBank.toFixed(2) + '</text>');
     parts.push('<text x="160" y="' + (yw - 4) + '" font-size="10" font-weight="700" text-anchor="middle" fill="' +
-      (over ? '#b71c1c' : '#0d47a1') + '">▼ ' + h.toFixed(2) + ' ม.รทก.</text>');
+      (over ? '#b71c1c' : '#0d47a1') + '">▼ ' + h.toFixed(2) + ' ม.รทก.' + (when ? ' (' + when + ')' : '') + '</text>');
     svg.innerHTML = parts.join('');
   }
 
@@ -293,7 +496,7 @@
   var flowToken = 0;
   function stopFlow() {
     flowToken++;
-    state.hydro = null; state.hsum = null; state.liveDepth = null; state.depthCache = {}; state.timeIdx = -1;
+    state.hydro = null; state.hsum = null; state.liveDepth = null; state.depthCache = {}; state.timeIdx = -1; state.selTime = null;
     $('flowResults').innerHTML = '';
     setupTimeline();
   }
@@ -307,6 +510,9 @@
     var token = flowToken;
     var qx = Math.max(0, currentQ() - bankfullQ());
     if (!(bath.stats.areaRai > 0) && !(bath.envelopeStats && bath.envelopeStats.areaRai > 0)) return;
+    var f = state.scn === 'forecast' ? state.fc : null;
+    state.simStart = f && f.start != null ? f.start : null;
+    if (f && f.start == null) qx = 0;
     if (qx <= 0) {
       $('flowResults').innerHTML = '<p class="small">K.55A ยังไม่เกินตลิ่ง (Q ≤ ' + fmt(bankfullQ()) +
         ') จึงไม่มีน้ำไหลล้นเข้าพื้นที่ในการจำลองการไหล — แผนที่แสดงเฉพาะพื้นที่ต่ำกว่าระดับน้ำ</p>';
@@ -314,17 +520,26 @@
     }
     landuseForGrid(grid).then(function (lu) {
       if (token !== flowToken) return;
-      var s = HY.setup(grid, bath, lu, {
+      var opts = {
         inflowQ: qx, durationH: P.overflowHours, demOffsetM: P.demOffsetM,
         maxCells: P.flowMaxCells, waterBodyDepthM: P.waterBodyDepthM, snapshotMin: 60
-      });
+      };
+      if (f) {
+        // น้ำล้นตามกราฟคาดการณ์ ตั้งแต่เริ่มล้นตลิ่งจนสิ้นสุดช่วงคาดการณ์
+        var simT0 = f.start, hp = f.peak.h, bq = bankfullQ();
+        opts.durationH = (f.end - simT0) / 3600000;
+        opts.inflowFn = function (t) { return f.qAt(simT0 + t * 1000) - bq; };
+        opts.stageFn = function (t) { return f.hAt(simT0 + t * 1000) - hp; };
+      }
+      var s = HY.setup(grid, bath, lu, opts);
       state.hydro = s;
       var t0 = performance.now(), lastDraw = 0;
       (function tick() {
         if (token !== flowToken) return;
         var done = HY.run(s, 50);
         var pct = Math.min(100, s.t / s.T * 100);
-        $('flowResults').innerHTML = '<p class="small">กำลังจำลองการไหลของน้ำ: ชั่วโมงที่ ' + fmt(s.t / 3600, 1) + ' / ' + fmt(P.overflowHours) +
+        $('flowResults').innerHTML = '<p class="small">กำลังจำลองการไหลของน้ำ: ' +
+          (state.simStart != null ? fmtTime(state.simStart + s.t * 1000) + ' (ถึง ' + fmtTime(state.simStart + s.T * 1000) + ')' : 'ชั่วโมงที่ ' + fmt(s.t / 3600, 1) + ' / ' + fmt(P.overflowHours)) +
           ' · ' + fmt(s.nc) + ' เซลล์ (' + fmt(s.dx) + ' ม.) · น้ำเข้าพื้นที่ ' + fmt(s.volIn / 1e6, 1) + ' ล้าน ลบ.ม.</p>' +
           '<div class="progress"><div style="width:' + pct.toFixed(1) + '%"></div></div>';
         var now = performance.now();
@@ -359,8 +574,24 @@
   function updateTimeLabel() {
     var s = state.hydro;
     if (!s || !state.hsum) return;
-    $('spreadLabel').textContent = state.timeIdx < 0 ? 'สูงสุดตลอด ' + fmt(P.overflowHours) + ' ชม.'
-      : 'ชั่วโมงที่ ' + fmt(s.snapshots[state.timeIdx].t / 3600, 0);
+    if (state.timeIdx < 0) {
+      state.selTime = null;
+      $('spreadLabel').textContent = 'สูงสุดตลอด' + (state.simStart != null ? 'ช่วงคาดการณ์' : ' ' + fmt(P.overflowHours) + ' ชม.');
+      return;
+    }
+    var st = s.snapshots[state.timeIdx].t;
+    if (state.simStart != null) {
+      state.selTime = state.simStart + st * 1000;
+      $('spreadLabel').textContent = fmtTime(state.selTime) + ' · ' + state.fc.hAt(state.selTime).toFixed(2) + ' ม.';
+    } else {
+      state.selTime = null;
+      $('spreadLabel').textContent = 'ชั่วโมงที่ ' + fmt(st / 3600, 0);
+    }
+  }
+  function onTimeChanged() {
+    updateTimeLabel();
+    renderFlood();
+    if (state.scn === 'forecast') { renderForecastChart(); renderStatus(); }
   }
   function currentFlowDepth() {
     var s = state.hydro;
@@ -373,7 +604,7 @@
   }
 
   // ปริมาตรน้ำที่ล้นตลิ่ง = (Q − Q ที่ระดับตลิ่งต่ำสุด) × ระยะเวลา
-  function bankfullQ() { return R.dischargeFromLevel(PS.ratingCurve, Math.min(PS.leftBank, PS.rightBank)); }
+  function bankfullQ() { return R.dischargeFromLevel(PS.ratingCurve, PS.bank); }
   function overflowVolume() { return Math.max(0, currentQ() - bankfullQ()) * P.overflowHours * 3600; }
 
   // ---------------- ชั้นแสดงผล ----------------
@@ -493,13 +724,14 @@
     var hs = state.hydro, S = state.hsum;
     if (!hs || !S) return;
     var total = S.hazardRai.reduce(function (a, b) { return a + b; }, 0) || 1;
-    var html = '<h3>ผลจำลองการไหลของน้ำ ' + fmt(P.overflowHours) + ' ชั่วโมง</h3><div class="kpis">' +
+    var html = '<h3>ผลจำลองการไหลของน้ำ ' + (state.simStart != null ? fmtTime(state.simStart) + ' – ' + fmtTime(state.simStart + hs.T * 1000)
+      : fmt(P.overflowHours) + ' ชั่วโมง') + '</h3><div class="kpis">' +
       kpi(fmt(S.areaRai), 'ไร่ น้ำท่วมสูงสุด (' + fmt(S.areaKm2, 1) + ' ตร.กม.)') +
       kpi(fmt(S.lossBaht / 1e6, 1) + ' ล้าน', 'บาท ความเสียหายทางเศรษฐกิจโดยประมาณ') +
       kpi(fmt(S.v99, 2) + ' / ' + fmt(S.vmax, 1), 'ม./วินาที ความเร็วน้ำ (P99 / สูงสุด)') +
       kpi(fmt(S.fastRai), 'ไร่ น้ำไหลแรง ≥ 1 ม./วินาที') +
       kpi(fmt(S.heavyBuiltRai, 1), 'ไร่ เขตบ้านเรือนเสี่ยงเสียหายหนัก (d·v ≥ 3)') +
-      kpi(fmt(S.volInM3 / 1e6, 1) + ' / ' + fmt(S.volLostM3 / 1e6, 1), 'ล้าน ลบ.ม. น้ำเข้าพื้นที่ / ค้างในแม่น้ำ') +
+      kpi(fmt(S.volInM3 / 1e6, 1) + ' / ' + fmt((S.volOutM3 || 0) / 1e6, 1), 'ล้าน ลบ.ม. น้ำล้นเข้าพื้นที่ / ไหลกลับลงแม่น้ำ') +
       '</div>';
     html += '<table class="cls"><tr><td colspan="3"><b>ระดับอันตรายต่อคน</b></td></tr>';
     HY.HAZARD.forEach(function (h, i) {
@@ -596,7 +828,7 @@
       if (state.hsum) {
         li.innerHTML = esc(x.p.name) + ' — <b>' + esc(x.s.hazard >= 0 ? HY.HAZARD[x.s.hazard].label.split(' — ')[0] : '') + '</b>' +
           ' ลึก ' + x.d.toFixed(2) + ' ม. · ไหล ' + fmt(x.s.v, 2) + ' ม./วิ' +
-          (x.s.tArrive >= 0 ? ' <span class="muted small">(น้ำถึงใน ~' + fmt(x.s.tArrive / 3600, 1) + ' ชม.)</span>' : '');
+          (x.s.tArrive >= 0 ? ' <span class="muted small">(' + arrivalText(x.s.tArrive) + ')</span>' : '');
       } else {
         li.innerHTML = esc(x.p.name) + ' — ลึกประมาณ <b>' + x.d.toFixed(2) + ' ม.</b>' +
           (x.s && x.s.dist != null ? ' <span class="muted small">(' + fmt(x.s.dist / 1000, 1) + ' กม. จากตลิ่ง)</span>' : '');
@@ -622,6 +854,9 @@
     }
     if (!best) return null;
     return HY.probe(hs, S, M.gridLatLon(g, best[0], best[1])[0], M.gridLatLon(g, best[0], best[1])[1]);
+  }
+  function arrivalText(tSec) {
+    return state.simStart != null ? 'น้ำถึง ~' + fmtTime(state.simStart + tSec * 1000) : 'น้ำถึงใน ~' + fmt(tSec / 3600, 1) + ' ชม. หลังเริ่มล้น';
   }
   function compass(vx, vy) {
     // vy ชี้ลงใต้ในระบบพิกัดภาพ
@@ -650,10 +885,10 @@
           (f.depth > 0.02
             ? '<b>ผลจำลองการไหล:</b> ลึกสูงสุด <b>' + f.depth.toFixed(2) + ' ม.</b><br>' +
               'ความเร็วน้ำสูงสุด <b>' + fmt(f.v, 2) + ' ม./วินาที</b>' + (f.v > 0.05 ? ' ไหลไปทาง' + compass(f.vx, f.vy) : '') + '<br>' +
-              (f.tArrive >= 0 ? 'น้ำมาถึงหลังเริ่มล้นตลิ่ง ~<b>' + fmt(f.tArrive / 3600, 1) + ' ชม.</b> · ท่วมขัง ~' + fmt(f.wetH, 0) + ' ชม.<br>' : '') +
+              (f.tArrive >= 0 ? 'น้ำมาถึง: <b>' + arrivalText(f.tArrive) + '</b> · ท่วมขัง ~' + fmt(f.wetH, 0) + ' ชม.<br>' : '') +
               (f.hazard >= 0 ? 'ระดับอันตราย: <b>' + esc(HY.HAZARD[f.hazard].label) + '</b><br>' : '') +
               'ความเสียหาย ~' + fmt(f.damagePerM2 * 1600) + ' บาท/ไร่'
-            : 'ผลจำลองการไหล: น้ำไปไม่ถึงภายใน ' + fmt(P.overflowHours) + ' ชม.');
+            : 'ผลจำลองการไหล: น้ำไปไม่ถึงภายในช่วงที่จำลอง');
       }
     }
     L.popup().setLatLng(latlng).setContent(html).openOn(map);
@@ -689,8 +924,17 @@
 
     // ถ้ามีข้อมูลจริงของ K.55A ให้ตั้งค่าเป็นระดับปัจจุบัน
     if (state.k55Observed != null) {
-      if (state.mode !== 'h') setMode('h');
-      setValue(state.k55Observed.toFixed(2));
+      var k55 = region.filter(function (s) { return s.isPrimary; })[0];
+      var tObs = parseStationTime(k55.time);
+      if (state.scn === 'forecast' && isFinite(tObs)) {
+        FCP.obs = { time: tObs, h: k55.wl };
+        fillForecastInputs();
+        rebuildForecast();
+        renderStatus();
+      } else {
+        if (state.mode !== 'h') setMode('h');
+        setValue(state.k55Observed.toFixed(2));
+      }
     }
     renderFeed(region, source);
     scheduleSim();
@@ -867,11 +1111,10 @@
       state.timeIdx = 0;
       playTimer = setInterval(function () {
         $('spreadRange').value = state.timeIdx;
-        updateTimeLabel();
-        renderFlood();
+        onTimeChanged();
         state.timeIdx++;
-        if (state.timeIdx >= n) { state.timeIdx = -1; $('spreadRange').value = n; updateTimeLabel(); renderFlood(); play(); }
-      }, 350);
+        if (state.timeIdx >= n) { state.timeIdx = -1; $('spreadRange').value = n; onTimeChanged(); play(); }
+      }, 300);
       return;
     }
     state.spread = 0;
@@ -884,7 +1127,7 @@
   }
 
   // ---------------- เริ่มต้น ----------------
-  document.querySelectorAll('.seg button').forEach(function (b) { b.onclick = function () { setMode(b.dataset.mode); }; });
+  document.querySelectorAll('#modeSeg button').forEach(function (b) { b.onclick = function () { setMode(b.dataset.mode); }; });
   $('valueRange').addEventListener('input', function (e) { setValue(e.target.value); });
   $('valueInput').addEventListener('change', function (e) { setValue(e.target.value); });
   $('btnFetch').onclick = fetchThaiWater;
@@ -900,7 +1143,8 @@
     if (state.hsum) {
       var i = parseInt(e.target.value, 10);
       state.timeIdx = i >= state.hydro.snapshots.length ? -1 : i;
-      updateTimeLabel();
+      onTimeChanged();
+      return;
     } else state.spread = e.target.value / 100;
     renderFlood();
   });
@@ -928,17 +1172,46 @@
   bindParam('pBankW', 'bankDemWeight', P);
   $('pVolume').checked = P.limitByVolume;
   $('pVolume').onchange = function () { P.limitByVolume = $('pVolume').checked; scheduleSim(); };
-  bindParam('pLeft', 'leftBank', PS);
-  bindParam('pRight', 'rightBank', PS);
+  bindParam('pBank', 'bank', PS, null, function () {
+    PS.leftBank = PS.rightBank = PS.bank;
+    PS.bankfullQ = bankfullQ();
+    forecastChanged();
+  });
+
+  // คาดการณ์
+  document.querySelectorAll('#scnSeg button').forEach(function (b) { b.onclick = function () { setScenario(b.dataset.scn); }; });
+  document.querySelectorAll('#presetSeg button').forEach(function (b) {
+    b.onclick = function () { Object.assign(FCP, FC.PRESETS[b.dataset.preset]); fillForecastInputs(); forecastChanged(); };
+  });
+  [['fcRate', 'riseRate'], ['fcPeakAfter', 'peakAfterH'], ['fcHold', 'holdH'], ['fcFall', 'fallRate'], ['fcHorizon', 'horizonH']].forEach(function (a) {
+    $(a[0]).addEventListener('change', function () {
+      var v = parseFloat($(a[0]).value);
+      if (!isFinite(v) || v < 0) { $(a[0]).value = FCP[a[1]]; return; }
+      FCP[a[1]] = v; fillForecastInputs(); forecastChanged();
+    });
+  });
+  $('fcShape').onchange = function () { FCP.riseShape = $('fcShape').value; fillForecastInputs(); forecastChanged(); };
+  $('fcTime').onchange = $('fcLevel').onchange = function () {
+    var t = fromLocalInput($('fcTime').value), h = parseFloat($('fcLevel').value);
+    if (!isFinite(t) || !isFinite(h)) { fillForecastInputs(); return; }
+    FCP.obs = { time: t, h: h };
+    forecastChanged();
+  };
+  var chart = $('fcChart');
+  chart.addEventListener('pointermove', onChartMove);
+  chart.addEventListener('pointerleave', function () { $('fcTip').hidden = true; var c = $('fcCross'); if (c) c.setAttribute('visibility', 'hidden'); });
+  chart.addEventListener('click', onChartClick);
 
   renderChips();
   renderLegend();
-  setMode('q');
-  setValue(3000);
+  fillForecastInputs();
+  rebuildForecast();
+  setMode('h');
+  setValue(CFG.forecast.obs.h);
   loadOsmRiver();
   loadOsmPlaces();
   fetchThaiWater();
 
   // สำหรับตรวจสอบ/ทดสอบจาก console
-  window.floodApp = { map: map, state: state, params: P, runSim: runSim, setView: function (v) { var b = document.querySelector('#viewSeg button[data-view="' + v + '"]'); if (b) b.click(); }, setValue: setValue, setMode: setMode, applyStations: applyStations };
+  window.floodApp = { map: map, state: state, params: P, forecast: FCP, setScenario: setScenario, runSim: runSim, setView: function (v) { var b = document.querySelector('#viewSeg button[data-view="' + v + '"]'); if (b) b.click(); }, setValue: setValue, setMode: setMode, applyStations: applyStations };
 })();

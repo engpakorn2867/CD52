@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // คำนวณตารางสถานการณ์ตาม Rating Curve ของ K.55A จากบรรทัดคำสั่ง (ใช้แบบจำลองเดียวกับหน้าเว็บ)
-// ใช้งาน: npm install && node tools/scenarios.js [ซูม DEM=12] [ชั่วโมงน้ำล้น=48] [--fast = แบบอ่างน้ำเท่านั้น]
+// ใช้งาน: npm install && node tools/scenarios.js [ซูม DEM=12] [ชั่วโมงน้ำล้น=48] [--fast = แบบอ่างน้ำเท่านั้น] [--forecast = ตามกราฟคาดการณ์]
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -10,12 +10,14 @@ const CFG = require(path.join(ROOT, 'js/config.js'));
 const M = require(path.join(ROOT, 'js/flood.js'));
 const R = require(path.join(ROOT, 'js/rating.js'));
 const HY = require(path.join(ROOT, 'js/hydro.js'));
+const FC = require(path.join(ROOT, 'js/forecast.js'));
 
 const sandbox = {};
 new Function('window', fs.readFileSync(path.join(ROOT, 'data/maeklong-river.js'), 'utf8') +
   fs.readFileSync(path.join(ROOT, 'data/landcover.js'), 'utf8'))(sandbox);
 const line = sandbox.MAEKLONG_RIVER, LC = sandbox.LANDCOVER;
 const FLOW = !process.argv.includes('--fast');
+const FORECAST = process.argv.includes('--forecast');
 
 function landuseFor(g) {
   const png = PNG.sync.read(Buffer.from(LC.png.split(',')[1], 'base64'));
@@ -66,6 +68,40 @@ async function loadGrid(b, z) {
   return { z, x0, y0, w, h, elev };
 }
 
+// คาดการณ์ตามเวลา: จำลองการไหลตามกราฟระดับน้ำของแต่ละสถานการณ์ (ค่าสังเกต + ตารางคาดการณ์ใน js/config.js)
+async function runForecast(grid, river, bankDev, anchor, qbf) {
+  const P = CFG.params, PS = CFG.primaryStation, landuse = landuseFor(grid);
+  const t = ms => new Date(ms).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  for (const key of ['best', 'mid', 'worst']) {
+    const f = FC.build(Object.assign({}, CFG.forecast, FC.PRESETS[key], { bank: PS.bank, ratingCurve: PS.ratingCurve }));
+    const hp = f.peak.h;
+    const profile = M.makeProfile([{ chainage: anchor.chainage, ws: hp, leftBank: PS.bank, rightBank: PS.bank }], P.riverSlopeMPerKm);
+    const bath = M.simulate(grid, river, profile, { demOffsetM: P.demOffsetM, maxSpreadKm: P.maxSpreadKm, bankDev,
+      bankDevWeight: P.bankDemWeight, waterBodyDepthM: P.waterBodyDepthM });
+    const t0 = f.start;
+    const hs = HY.setup(grid, bath, landuse, { durationH: (f.end - t0) / 3600000, demOffsetM: P.demOffsetM,
+      maxCells: P.flowMaxCells, waterBodyDepthM: P.waterBodyDepthM,
+      inflowFn: s => f.qAt(t0 + s * 1000) - qbf, stageFn: s => f.hAt(t0 + s * 1000) - hp });
+    HY.run(hs, Infinity);
+    const S = HY.summarize(hs, { builtBahtPerM2: P.builtBahtPerM2, cropBahtPerRai: P.cropBahtPerRai,
+      treeBahtPerRai: P.treeBahtPerRai, otherBahtPerRai: P.otherBahtPerRai, compensationBahtPerRai: P.damageBahtPerRai });
+    console.log(`\n[${FC.PRESETS[key].label}] ยอด ${hp.toFixed(2)} ม. (Q≈${Math.round(f.peak.q)}) ${t(f.peak.t)} · เริ่มล้น ${t(f.start)} · ลดต่ำกว่าตลิ่ง ${f.recede ? t(f.recede) : 'หลัง ' + t(f.end)}`);
+    console.log(`  ท่วมสูงสุด ${Math.round(S.areaRai).toLocaleString()} ไร่ · อันตราย ต่ำ/ปานกลาง/สูง/รุนแรงมาก ${S.hazardRai.map(v => Math.round(v).toLocaleString()).join('/')} ไร่` +
+      ` · ความเร็ว P99 ${S.v99.toFixed(2)} ม./วิ · เสียหาย ${(S.lossBaht / 1e6).toFixed(0)} ล้านบาท · น้ำเข้า/กลับ ${(S.volInM3 / 1e6).toFixed(0)}/${(S.volOutM3 / 1e6).toFixed(0)} ล้าน ลบ.ม.`);
+    const row = [];
+    for (let i = 0; i < hs.snapshots.length; i += 12) {
+      const d = HY.fineDepth(hs, hs.snapshots[i].h);
+      let a = 0;
+      for (let y = 0; y < grid.h; y++) {
+        const mpp = M.metersPerPixel(M.yToLat(grid.y0 + y + 0.5, grid.z), grid.z);
+        for (let x = 0; x < grid.w; x++) if (d[y * grid.w + x] > 0.02) a += mpp * mpp;
+      }
+      row.push(t(t0 + hs.snapshots[i].t * 1000) + ' ' + Math.round(a / 1600).toLocaleString());
+    }
+    console.log('  พื้นที่น้ำท่วม (ไร่) ทุก 12 ชม.: ' + row.join(' | '));
+  }
+}
+
 (async () => {
   const P = CFG.params, PS = CFG.primaryStation;
   const grid = await loadGrid(CFG.bbox, Z);
@@ -73,6 +109,7 @@ async function loadGrid(b, z) {
   const bankDev = M.bankDeviation(grid, river);
   const anchor = M.projectToLine(line, PS.lat, PS.lon);
   const qbf = R.dischargeFromLevel(PS.ratingCurve, Math.min(PS.leftBank, PS.rightBank));
+  if (FORECAST) return runForecast(grid, river, bankDev, anchor, qbf);
   console.log(`DEM ซูม ${Z} (${grid.w}×${grid.h}), น้ำล้นตลิ่ง ${HOURS} ชม., Q ตลิ่งเต็ม ≈ ${qbf.toFixed(0)} ลบ.ม./วินาที`);
   const landuse = FLOW ? landuseFor(grid) : null;
   const P2 = CFG.params;

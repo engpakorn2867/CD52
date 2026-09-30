@@ -27,6 +27,7 @@
     var low = Math.min(leftBank, rightBank), high = Math.max(leftBank, rightBank);
     var lowSide = leftBank <= rightBank ? 'ซ้าย' : 'ขวา';
     if (h <= low) return { level: 0, label: 'ต่ำกว่าตลิ่ง', excess: h - low, freeboard: low - h };
+    if (leftBank === rightBank) return { level: 2, label: 'ล้นตลิ่ง', excess: h - low, freeboard: 0 };
     if (h <= high) return { level: 1, label: 'ล้นตลิ่ง' + lowSide, excess: h - low, freeboard: 0 };
     return { level: 2, label: 'ล้นตลิ่งทั้งสองฝั่ง', excess: h - low, freeboard: 0 };
   }

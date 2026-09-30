@@ -16,16 +16,57 @@
       </header>
 
       <section>
-        <h2>1. ระดับน้ำที่สถานี K.55A</h2>
-        <div class="seg" role="tablist">
-          <button type="button" data-mode="q" class="active">ปริมาณน้ำ (ลบ.ม./วินาที)</button>
-          <button type="button" data-mode="h">ระดับน้ำ (ม.รทก.)</button>
+        <h2>1. ระดับน้ำ K.55A และการคาดการณ์</h2>
+        <p class="small muted" id="bankInfo"></p>
+        <div class="seg" id="scnSeg">
+          <button type="button" data-scn="forecast" class="active">คาดการณ์ตามเวลา</button>
+          <button type="button" data-scn="manual">กำหนดสถานการณ์เอง</button>
         </div>
-        <div class="row">
-          <input id="valueRange" type="range" min="2500" max="4000" step="10" value="3000">
-          <input id="valueInput" type="number" step="10" value="3000">
+
+        <div id="fcBox">
+          <div class="row fc-obs">
+            <label>ค่าล่าสุด (วัน-เวลา) <input id="fcTime" type="datetime-local"></label>
+            <label>ระดับน้ำ (ม.รทก.) <input id="fcLevel" type="number" step="0.01"></label>
+          </div>
+          <div class="seg small-seg" id="presetSeg">
+            <button type="button" data-preset="best">ดีที่สุด</button>
+            <button type="button" data-preset="mid" class="active">ค่ากลาง</button>
+            <button type="button" data-preset="worst">เลวร้าย</button>
+          </div>
+          <p class="small muted" id="presetDesc"></p>
+          <div class="chart-wrap">
+            <svg id="fcChart" viewBox="0 0 360 200" role="img" aria-label="กราฟคาดการณ์ระดับน้ำ K.55A ตามเวลา"></svg>
+            <div id="fcTip" class="tip" hidden></div>
+          </div>
+          <details>
+            <summary>ปรับสมมติฐานการคาดการณ์</summary>
+            <label>อัตราน้ำขึ้น (ม./ชม.) <input id="fcRate" type="number" step="0.005"></label>
+            <label>ชั่วโมงจนถึงยอดน้ำ (นับจากจุดคาดการณ์สุดท้าย) <input id="fcPeakAfter" type="number" step="1" min="0"></label>
+            <label>รูปแบบช่วงขึ้นต่อ
+              <select id="fcShape"><option value="decay">ค่อยๆ ชะลอจนถึงยอด</option><option value="linear">ขึ้นด้วยอัตราเดิมจนถึงยอด</option></select>
+            </label>
+            <label>ทรงตัวที่ยอด (ชม.) <input id="fcHold" type="number" step="1" min="0"></label>
+            <label>อัตราน้ำลดหลังยอด (ม./ชม.) <input id="fcFall" type="number" step="0.01" min="0"></label>
+            <label>ระยะคาดการณ์ (ชม. หลังค่าล่าสุด) <input id="fcHorizon" type="number" step="12" min="12" max="336"></label>
+          </details>
+          <details>
+            <summary>ตารางคาดการณ์รายชั่วโมง</summary>
+            <div id="fcTable" class="fc-table"></div>
+          </details>
         </div>
-        <div class="chips" id="curveChips"></div>
+
+        <div id="manualBox" hidden>
+          <div class="seg" id="modeSeg" role="tablist">
+            <button type="button" data-mode="q">ปริมาณน้ำ (ลบ.ม./วินาที)</button>
+            <button type="button" data-mode="h" class="active">ระดับน้ำ (ม.รทก.)</button>
+          </div>
+          <div class="row">
+            <input id="valueRange" type="range" min="8" max="14" step="0.01" value="10.21">
+            <input id="valueInput" type="number" step="0.01" value="10.21">
+          </div>
+          <div class="chips" id="curveChips"></div>
+          <p class="small muted">น้ำล้นตลิ่งต่อเนื่องคงที่ตาม “ระยะเวลาน้ำล้นตลิ่ง” ในหน้าตั้งค่า</p>
+        </div>
         <div id="k55Status" class="status"></div>
         <svg id="xsec" viewBox="0 0 320 150" aria-label="รูปตัดลำน้ำ K.55A"></svg>
       </section>
@@ -73,7 +114,7 @@
           <label class="check"><input type="checkbox" id="pDynamic"> จำลองการไหลของน้ำ (ความแรง ทิศทาง เวลา — สมจริงกว่า)</label>
           <label>จำนวนเซลล์จำลองการไหลสูงสุด <input id="pCells" type="number" step="1000" min="2000" max="80000"></label>
           <label class="check"><input type="checkbox" id="pVolume"> (แบบเร็ว) จำกัดพื้นที่ท่วมตามปริมาตรน้ำที่ล้นตลิ่ง</label>
-          <label>ระยะเวลาน้ำล้นตลิ่ง (ชั่วโมง) <input id="pHours" type="number" step="6" min="1"></label>
+          <label>ระยะเวลาน้ำล้นตลิ่ง — โหมดกำหนดเอง (ชั่วโมง) <input id="pHours" type="number" step="6" min="1"></label>
           <label>ความลาดชันผิวน้ำ (ม./กม.) <input id="pSlope" type="number" step="0.01"></label>
           <label>น้ำหนักความสูงตลิ่งเฉพาะที่จาก DEM (0–1) <input id="pBankW" type="number" step="0.1" min="0" max="1"></label>
           <label>ปรับแก้ DEM (ม., ลบออกจากความสูงดาวเทียม) <input id="pOffset" type="number" step="0.1"></label>
@@ -86,16 +127,15 @@
           <label>ความละเอียด DEM
             <select id="pZoom"><option value="12">ปกติ (~37 ม.)</option><option value="13">ละเอียด (~18 ม.)</option></select>
           </label>
-          <label>ตลิ่งซ้าย K.55A (ม.รทก.) <input id="pLeft" type="number" step="0.01"></label>
-          <label>ตลิ่งขวา K.55A (ม.รทก.) <input id="pRight" type="number" step="0.01"></label>
+          <label>ระดับตลิ่ง K.55A ทั้งสองฝั่ง (ม.รทก.) <input id="pBank" type="number" step="0.01"></label>
         </details>
       </section>
 
       <footer class="small muted">
-        <p><b>หมายเหตุ:</b> เป็นการประเมินขอบเขตเสี่ยงแบบ “อ่างน้ำเชื่อมต่อ” จากความสูงภูมิประเทศดาวเทียม (DEM ~30 ม.)
+        <p><b>หมายเหตุ:</b> การคาดการณ์ระดับน้ำหลังจุดสุดท้ายของตารางเป็นสมมติฐาน (เลือก/ปรับได้) ไม่ใช่ประกาศทางการ · เป็นการประเมินขอบเขตเสี่ยงแบบ “อ่างน้ำเชื่อมต่อ” จากความสูงภูมิประเทศดาวเทียม (DEM ~30 ม.)
           ร่วมกับแบบจำลองการไหลของน้ำ 2 มิติอย่างง่าย ไม่รวมน้ำฝน ประตูระบายน้ำ และคันกั้นน้ำขนาดเล็ก ใช้ประกอบการเฝ้าระวังเท่านั้น
           ให้ยึดประกาศของกรมชลประทาน/ปภ./จังหวัดเป็นหลัก</p>
-        <p>ข้อมูล: Rating Curve K.55A (ศูนย์อุทกวิทยาชลประทานภาคตะวันตก), คลังข้อมูลน้ำแห่งชาติ thaiwater.net,
+        <p>ข้อมูล: ตารางคาดการณ์ระดับน้ำ K.55A 30 ก.ย. 2569, Rating Curve K.55A (ศูนย์อุทกวิทยาชลประทานภาคตะวันตก), คลังข้อมูลน้ำแห่งชาติ thaiwater.net,
           AWS Terrain Tiles (SRTM ฯลฯ), ESA WorldCover 2021 (CC BY 4.0), ภาพดาวเทียม Esri World Imagery, OpenStreetMap, Natural Earth</p>
       </footer>
     </aside>
@@ -106,6 +146,7 @@
   <script src="js/config.js"></script>
   <script src="data/maeklong-river.js"></script>
   <script src="js/rating.js"></script>
+  <script src="js/forecast.js"></script>
   <script src="js/flood.js"></script>
   <script src="js/hydro.js"></script>
   <script src="data/landcover.js"></script>

@@ -68,7 +68,9 @@
   // ---------- เตรียมการจำลอง ----------
   // grid: ตาราง DEM ละเอียด, bath: ผลจาก FloodModel.simulate (ขอบเขตเสี่ยงสูงสุด)
   // landuse: Uint8Array ขนาดเท่า grid (หรือ null)
-  // opts: { inflowQ, durationH, demOffsetM, maxCells, snapshotMin, waterBodyDepthM }
+  // opts: { inflowQ, durationH, demOffsetM, maxCells, snapshotMin, waterBodyDepthM,
+  //         inflowFn(tSec) → Q น้ำล้นตลิ่งตามเวลา (แทน inflowQ คงที่),
+  //         stageFn(tSec) → ระดับแม่น้ำ ณ เวลานั้นลบระดับที่ใช้คำนวณขอบเขต (ม.) — ใช้ปิดจุดรับน้ำและให้น้ำไหลกลับเมื่อแม่น้ำลด }
   // ตัวแปรสถานะทั้งหมดเก็บแบบบีบอัดเฉพาะเซลล์ที่ใช้งาน (index 0..nc-1)
   function setup(grid, bath, landuse, opts) {
     var fw = grid.w, fh = grid.h, off = opts.demOffsetM || 0;
@@ -145,7 +147,8 @@
       tArrive: new Float32Array(nc).fill(-1), wet: new Float32Array(nc),
       sx: new Float32Array(nc), sy: new Float32Array(nc), cx: new Uint8Array(nc), cy: new Uint8Array(nc),
       inflow: Int32Array.from(inflow), inflowW: Float64Array.from(inflowW), inflowWs: Float32Array.from(inflowWs),
-      Q: Math.max(0, opts.inflowQ || 0), T: (opts.durationH || 48) * 3600,
+      Q: Math.max(0, opts.inflowQ || 0), Qfn: opts.inflowFn || null, stageFn: opts.stageFn || null,
+      T: (opts.durationH || 48) * 3600, volOut: 0,
       t: 0, lastRec: 0, steps: 0, volIn: 0, volLost: 0, done: false,
       snapEvery: (opts.snapshotMin || 60) * 60, nextSnap: 0, snapshots: [],
       waterBodyDepthM: wbd, demOffsetM: off,
@@ -200,14 +203,26 @@
       for (i = 0; i < xa.length; i++) { var q = qx[i] * fac; h[xa[i]] -= q; h[xb[i]] += q; }
       for (i = 0; i < ya.length; i++) { q = qy[i] * fac; h[ya[i]] -= q; h[yb[i]] += q; }
       // น้ำล้นตลิ่งเข้าสู่พื้นที่ (ปิดจุดที่ระดับน้ำบนตลิ่งเท่าระดับแม่น้ำแล้ว)
-      if (s.Q > 0 && s.inflow.length) {
-        var open = 0, inf = s.inflow;
-        for (var m = 0; m < inf.length; m++) if (z[inf[m]] + h[inf[m]] < s.inflowWs[m]) open += s.inflowW[m];
+      var Qt = s.Qfn ? Math.max(0, s.Qfn(s.t)) : s.Q, shift = s.stageFn ? s.stageFn(s.t) : 0;
+      var inf = s.inflow;
+      if (Qt > 0 && inf.length) {
+        var open = 0;
+        for (var m = 0; m < inf.length; m++) if (z[inf[m]] + h[inf[m]] < s.inflowWs[m] + shift) open += s.inflowW[m];
         if (open > 0) {
-          var add = s.Q * dt / dx2 / open;
-          for (m = 0; m < inf.length; m++) if (z[inf[m]] + h[inf[m]] < s.inflowWs[m]) h[inf[m]] += add * s.inflowW[m];
-          s.volIn += s.Q * dt;
-        } else s.volLost += s.Q * dt;
+          var add = Qt * dt / dx2 / open;
+          for (m = 0; m < inf.length; m++) if (z[inf[m]] + h[inf[m]] < s.inflowWs[m] + shift) h[inf[m]] += add * s.inflowW[m];
+          s.volIn += Qt * dt;
+        } else s.volLost += Qt * dt;
+      }
+      // แม่น้ำลดต่ำกว่าผิวน้ำบนตลิ่ง: น้ำไหลกลับลงแม่น้ำ (สมการฝาย 1.7·B·Δh^1.5)
+      if (s.stageFn) {
+        for (m = 0; m < inf.length; m++) {
+          var cm = inf[m], dh = z[cm] + h[cm] - (s.inflowWs[m] + shift);
+          if (dh <= 0 || h[cm] <= 0) continue;
+          var out = Math.min(1.7 * dx * Math.pow(dh, 1.5) * dt / dx2, dh, h[cm]);
+          h[cm] -= out;
+          s.volOut += out * dx2;
+        }
       }
       s.t += dt; s.steps++;
 
@@ -325,7 +340,7 @@
       hazardRai: byHaz.map(function (x) { return x / 1600; }),
       groups: groups, lossBaht: lossTotal, compensationBaht: cropRai * values.compensationBahtPerRai,
       vmax: vmaxAll, v99: percentile(vs, 0.99), fastRai: fast / 1600, collapseRai: collapse / 1600, heavyBuiltRai: heavy / 1600,
-      volInM3: s.volIn, volLostM3: s.volLost
+      volInM3: s.volIn, volLostM3: s.volLost, volOutM3: s.volOut
     };
   }
 

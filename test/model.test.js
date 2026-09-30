@@ -7,27 +7,28 @@ const R = require('../js/rating.js');
 const M = require('../js/flood.js');
 const TW = require('../js/thaiwater.js');
 
-const curve = CFG.primaryStation.ratingCurve;
 
-test('rating curve ตรงกับตารางของ K.55A', () => {
+test('rating curve: ประมาณค่าเชิงเส้นและต่อปลาย', () => {
+  const curve = [[1730, 9.0], [2304, 10.3], [3055, 12.0]];
   for (const [q, h] of curve) {
     assert.ok(Math.abs(R.levelFromDischarge(curve, q) - h) < 1e-9);
     assert.ok(Math.abs(R.dischargeFromLevel(curve, h) - q) < 1e-6);
   }
-  assert.ok(Math.abs(R.levelFromDischarge(curve, 3050) - 11.965) < 1e-9);
-  // นอกช่วงตาราง: ใช้ความชันช่วงปลาย
-  assert.ok(Math.abs(R.levelFromDischarge(curve, 3500) - 12.88) < 1e-9);
-  assert.ok(Math.abs(R.levelFromDischarge(curve, 2800) - 11.44) < 1e-9);
+  assert.ok(Math.abs(R.dischargeFromLevel(curve, 9.65) - 2017) < 1e-9);
+  // นอกช่วง: ใช้ความชันช่วงปลาย
+  assert.ok(Math.abs(R.dischargeFromLevel(curve, 12.5) - (3055 + 0.5 * 751 / 1.7)) < 1e-6);
 });
 
-test('สถานะตลิ่งตามภาพ: 2,900 ต่ำกว่าตลิ่ง, 2,950 ล้นตลิ่งซ้าย, 3,000 ล้นทั้งสองฝั่ง', () => {
-  const { leftBank, rightBank } = CFG.primaryStation;
-  assert.strictEqual(R.bankStatus(R.levelFromDischarge(curve, 2900), leftBank, rightBank).level, 0);
-  const s2950 = R.bankStatus(R.levelFromDischarge(curve, 2950), leftBank, rightBank); // 11.755
-  assert.strictEqual(s2950.level, 1);
-  assert.strictEqual(s2950.label, 'ล้นตลิ่งซ้าย');
-  // 11.86 สูงกว่าทั้งตลิ่งซ้าย 11.73 และขวา 11.81 (เส้นประแดงในภาพ)
-  assert.strictEqual(R.bankStatus(R.levelFromDischarge(curve, 3000), leftBank, rightBank).level, 2);
+test('สถานะตลิ่ง: ตลิ่งต่างระดับแยกฝั่ง ตลิ่งเท่ากันเป็น "ล้นตลิ่ง"', () => {
+  assert.strictEqual(R.bankStatus(11.65, 11.73, 11.81).level, 0);
+  const s = R.bankStatus(11.75, 11.73, 11.81);
+  assert.strictEqual(s.level, 1);
+  assert.strictEqual(s.label, 'ล้นตลิ่งซ้าย');
+  assert.strictEqual(R.bankStatus(11.86, 11.73, 11.81).level, 2);
+  assert.strictEqual(R.bankStatus(8.9, 9, 9).label, 'ต่ำกว่าตลิ่ง');
+  const e = R.bankStatus(10.21, 9, 9);
+  assert.strictEqual(e.label, 'ล้นตลิ่ง');
+  assert.ok(Math.abs(e.excess - 1.21) < 1e-9);
 });
 
 test('โปรไฟล์ระดับน้ำ: ลดตามความลาดชันและประมาณค่าระหว่างสถานี', () => {

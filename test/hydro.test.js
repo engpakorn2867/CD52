@@ -61,3 +61,18 @@ test('ระดับอันตราย Defra FD2320 และฟังก์
     for (let i = 1; i < c.length; i++) assert.ok(c[i] >= c[i - 1], g + ' ต้องไม่ลดลง');
   }
 });
+
+test('น้ำขึ้นแล้วลด: น้ำไหลกลับลงแม่น้ำ และมวลสมดุล (เข้า − ออก = คงค้าง)', () => {
+  const { grid, bath } = setupCase(0, 1);
+  const T = 12 * 3600;
+  // น้ำล้น 30 ลบ.ม./วินาทีใน 6 ชม.แรก แล้วแม่น้ำลดลง 1 ม.
+  const s = HY.setup(grid, bath, null, {
+    durationH: 12, maxCells: 100000, waterBodyDepthM: 10,
+    inflowFn: t => (t < T / 2 ? 30 : 0), stageFn: t => (t < T / 2 ? 0 : -1)
+  });
+  HY.run(s, 1e9);
+  let vol = 0;
+  for (let a = 0; a < s.nc; a++) vol += s.h[a] * s.dx * s.dx;
+  assert.ok(s.volOut > 0, 'ต้องมีน้ำไหลกลับ');
+  assert.ok(Math.abs(vol - (s.volIn - s.volOut)) / s.volIn < 1e-3, 'มวลต้องสมดุล');
+});
