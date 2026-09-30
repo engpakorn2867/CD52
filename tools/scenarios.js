@@ -11,6 +11,7 @@ const M = require(path.join(ROOT, 'js/flood.js'));
 const R = require(path.join(ROOT, 'js/rating.js'));
 const HY = require(path.join(ROOT, 'js/hydro.js'));
 const FC = require(path.join(ROOT, 'js/forecast.js'));
+const TR = require(path.join(ROOT, 'js/terrain.js'));
 
 const sandbox = {};
 new Function('window', fs.readFileSync(path.join(ROOT, 'data/maeklong-river.js'), 'utf8') +
@@ -99,12 +100,28 @@ async function runForecast(grid, river, bankDev, anchor, qbf) {
       row.push(t(t0 + hs.snapshots[i].t * 1000) + ' ' + Math.round(a / 1600).toLocaleString());
     }
     console.log('  พื้นที่น้ำท่วม (ไร่) ทุก 12 ชม.: ' + row.join(' | '));
+    const zones = [['ตัวเมืองบ้านโป่ง', 13.805, 13.83, 99.868, 99.885], ['ท่าผา', 13.845, 13.865, 99.85, 99.87], ['เบิกไพร', 13.80, 13.82, 99.855, 99.868]];
+    console.log('  สัดส่วนพื้นที่ที่ท่วม: ' + zones.map(([n, a0, a1, o0, o1]) => {
+      let a = 0, b = 0;
+      for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
+        const [la, lo] = M.gridLatLon(grid, x, y);
+        if (la < a0 || la > a1 || lo < o0 || lo > o1) continue;
+        b++; if (S.depth[y * grid.w + x] > 0.05) a++;
+      }
+      return n + ' ' + Math.round(a / b * 100) + '%';
+    }).join(' · '));
   }
 }
 
 (async () => {
   const P = CFG.params, PS = CFG.primaryStation;
   const grid = await loadGrid(CFG.bbox, Z);
+  if (P.bareEarth) {
+    const mpp = M.metersPerPixel(M.yToLat(grid.y0 + grid.h / 2, grid.z), grid.z);
+    const r = TR.bareEarth(grid, landuseFor(grid), { blockPx: Math.round(P.bareEarthBlockM / mpp), tolM: P.bareEarthTolM });
+    grid.elev = r.elev;
+    console.log(`ปรับพื้นดินเขตอาคาร/ต้นไม้ ${r.changed.toLocaleString()} พิกเซล (ลดเฉลี่ย ${r.meanDropM.toFixed(1)} ม.)`);
+  }
   const river = M.rasterizeRiver(grid, line, P.channelHalfWidthM);
   const bankDev = M.bankDeviation(grid, river);
   const anchor = M.projectToLine(line, PS.lat, PS.lon);

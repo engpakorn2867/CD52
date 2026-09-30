@@ -152,8 +152,39 @@
       t: 0, lastRec: 0, steps: 0, volIn: 0, volLost: 0, done: false,
       snapEvery: (opts.snapshotMin || 60) * 60, nextSnap: 0, snapshots: [],
       waterBodyDepthM: wbd, demOffsetM: off,
-      zSmooth: smoothElev(grid)
+      zSmooth: smoothElev(grid),
+      sub: subgrid(grid, bath, idx, cells, W, f, off, wsMax, wbd)
     };
+  }
+
+  // รายการพิกเซลละเอียดในแต่ละเซลล์หยาบ เรียงจากต่ำไปสูง (ใช้เติมน้ำแบบรักษาปริมาตร)
+  // ไม่รวมพิกเซลที่ต่ำกว่าระดับน้ำท่วมเกิน wbd (ถือเป็นแหล่งน้ำเดิม)
+  function subgrid(grid, bath, idx, cells, W, f, off, wsMax, wbd) {
+    var fw = grid.w, fh = grid.h, zs = smoothElev(grid), nc = cells.length;
+    var count = new Int32Array(nc + 1);
+    var owner = new Int32Array(fw * fh).fill(-1);
+    for (var fy = 0; fy < fh; fy++) for (var fx = 0; fx < fw; fx++) {
+      var fk = fy * fw + fx;
+      if (bath.dist[fk] === 65535 || bath.chan[fk] >= 0) continue;
+      var a = idx[((fy / f) | 0) * W + ((fx / f) | 0)];
+      if (a < 0) continue;
+      var zf = zs[fk] - off;
+      if (!(zf === zf) || zf < wsMax[cells[a]] - wbd) continue;
+      owner[fk] = a; count[a + 1]++;
+    }
+    for (var i = 0; i < nc; i++) count[i + 1] += count[i];
+    var list = new Int32Array(count[nc]), zl = new Float32Array(count[nc]), fill = Int32Array.from(count.subarray(0, nc));
+    for (var k = 0; k < owner.length; k++) if (owner[k] >= 0) { var p = fill[owner[k]]++; list[p] = k; zl[p] = zs[k] - off; }
+    // เรียงตามความสูงในแต่ละเซลล์
+    for (var c = 0; c < nc; c++) {
+      var s0 = count[c], s1 = count[c + 1];
+      var ord = [];
+      for (var j = s0; j < s1; j++) ord.push(j);
+      ord.sort(function (x, y) { return zl[x] - zl[y]; });
+      var L = ord.map(function (j) { return list[j]; }), Z = ord.map(function (j) { return zl[j]; });
+      for (j = s0; j < s1; j++) { list[j] = L[j - s0]; zl[j] = Z[j - s0]; }
+    }
+    return { start: count, list: list, z: zl };
   }
 
   // DEM เฉลี่ย 3×3 สำหรับย่อผลลงตารางละเอียด (ลดจุดกระพริบจากค่า DEM เป็นจำนวนเต็มเมตร)
@@ -278,17 +309,23 @@
   // hArr: ความลึกแบบบีบอัด (ไม่ใส่ = ค่าสูงสุด) ใช้แสดงผลตามเวลา
   function fineDepth(s, hArr) {
     var g = s.grid, fw = g.w, fh = g.h, f = s.f, W = s.W, off = s.demOffsetM;
-    var hc = hArr || s.hmax, out = new Float32Array(fw * fh);
-    var dist = s.bath.dist, chan = s.bath.chan;
-    for (var fy = 0; fy < fh; fy++) for (var fx = 0; fx < fw; fx++) {
-      var fk = fy * fw + fx;
-      if (dist[fk] === 65535 || chan[fk] >= 0) continue;
-      var a = s.idx[((fy / f) | 0) * W + ((fx / f) | 0)];
-      if (a < 0) continue;
+    var hc = hArr || s.hmax, out = new Float32Array(fw * fh), sub = s.sub, px = f * f;
+    // เติมน้ำแบบรักษาปริมาตร: ปริมาตรของเซลล์หยาบ (h × f² พิกเซล) เทลงพิกเซลที่ต่ำที่สุดก่อน
+    for (var a = 0; a < s.nc; a++) {
       var hv = hc[a];
-      if (!(hv > 0.02)) continue;
-      var d = s.z[a] + hv - (s.zSmooth[fk] - off);
-      if (d > 0 && d <= s.waterBodyDepthM) out[fk] = d;
+      if (!(hv > 0.005)) continue;
+      var s0 = sub.start[a], s1 = sub.start[a + 1];
+      if (s1 <= s0) continue;
+      var V = hv * px, sumZ = 0, level = 0;
+      for (var m = s0; m < s1; m++) {
+        sumZ += sub.z[m];
+        level = (V + sumZ) / (m - s0 + 1);
+        if (m + 1 >= s1 || level <= sub.z[m + 1]) break;
+      }
+      for (var j = s0; j < s1 && sub.z[j] < level; j++) {
+        var d = level - sub.z[j];
+        if (d > 0.02) out[sub.list[j]] = Math.min(d, s.waterBodyDepthM);
+      }
     }
     return out;
   }

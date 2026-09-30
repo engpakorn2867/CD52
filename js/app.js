@@ -406,12 +406,35 @@
 
   function ensureGrid() {
     var z = parseInt(P.demZoom, 10);
-    if (state.grid && state.gridZoom === z) return Promise.resolve(state.grid);
+    if (state.grid && state.gridZoom === z) return applyTerrain(state.grid);
     $('simStatus').textContent = 'กำลังโหลดความสูงภูมิประเทศ (DEM) ซูม ' + z + '…';
     return window.DEM.loadGrid(CFG.bbox, z, function (d, t, f) {
       $('simStatus').textContent = 'กำลังโหลด DEM ' + d + '/' + t + ' แผ่น' + (f ? ' (ล้มเหลว ' + f + ')' : '') + '…';
     }).then(function (g) {
       state.grid = g; state.gridZoom = z; state.river = null;
+      g.elevRaw = g.elev;
+      return applyTerrain(g);
+    });
+  }
+
+  // ปรับ DEM เขตอาคาร/ต้นไม้ (bare-earth) ตามการตั้งค่า — คำนวณใหม่เมื่อค่าเปลี่ยน
+  function applyTerrain(g) {
+    var key = P.bareEarth ? P.bareEarthBlockM + '/' + P.bareEarthTolM : 'raw';
+    if (g.terrainKey === key) return Promise.resolve(g);
+    return landuseForGrid(g).then(function (lu) {
+      if (P.bareEarth && lu) {
+        var mpp = M.metersPerPixel(M.yToLat(g.y0 + g.h / 2, g.z), g.z);
+        var r = window.Terrain.bareEarth({ w: g.w, h: g.h, elev: g.elevRaw, z: g.z, y0: g.y0 }, lu,
+          { blockPx: Math.max(4, Math.round(P.bareEarthBlockM / mpp)), tolM: P.bareEarthTolM });
+        g.elev = r.elev;
+        g.terrainNote = 'ปรับพื้นดินเขตอาคาร/ต้นไม้ ' + fmt(r.changed) + ' พิกเซล (ลดเฉลี่ย ' + fmt(r.meanDropM, 1) + ' ม.)';
+      } else {
+        g.elev = g.elevRaw;
+        g.terrainNote = 'ใช้ DEM ดาวเทียมตามเดิม';
+      }
+      g.terrainKey = key;
+      g._smooth = null;
+      state.river = null;
       return g;
     });
   }
@@ -439,7 +462,7 @@
       });
       var ms = performance.now() - t0;
       $('simStatus').innerHTML = 'คำนวณเสร็จใน ' + fmt(ms) + ' มิลลิวินาที · ตาราง ' + grid.w + '×' + grid.h +
-        ' (' + fmt(state.result.pxM) + ' ม./พิกเซล) · จุดควบคุม ' + cps.length + ' จุด · แนวลำน้ำ: ' + esc(state.riverSource) +
+        ' (' + fmt(state.result.pxM) + ' ม./พิกเซล) · ' + esc(grid.terrainNote || '') + ' · จุดควบคุม ' + cps.length + ' จุด · แนวลำน้ำ: ' + esc(state.riverSource) +
         (grid.missingTiles ? '<br><span style="color:var(--warn)">⚠ โหลด DEM ไม่ได้ ' + grid.missingTiles + '/' + grid.totalTiles +
           ' แผ่น — บริเวณนั้นไม่ถูกคำนวณ (เปลี่ยนความละเอียดเพื่อโหลดใหม่)</span>' : '');
       state.cps = cps;
@@ -1165,6 +1188,9 @@
   bindParam('pCrop', 'cropBahtPerRai', P, null, resummarize);
   bindParam('pTree', 'treeBahtPerRai', P, null, resummarize);
   bindParam('pCells', 'flowMaxCells', P);
+  bindParam('pBareTol', 'bareEarthTolM', P);
+  $('pBare').checked = P.bareEarth;
+  $('pBare').onchange = function () { P.bareEarth = $('pBare').checked; scheduleSim(); };
   $('pDynamic').checked = P.dynamicFlow;
   $('pDynamic').onchange = function () { P.dynamicFlow = $('pDynamic').checked; scheduleSim(); };
   bindParam('pZoom', 'demZoom', P, function (v) { return parseInt(v, 10); });

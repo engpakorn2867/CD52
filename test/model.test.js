@@ -124,3 +124,18 @@ test('แปลงข้อมูล ThaiWater และตรวจจับน
   assert.ok(TW.isPrimary(region[0], 'K.55A'));
   assert.strictEqual(region[0].amphoe, 'บ้านโป่ง');
 });
+
+test('ปรับพื้นดิน: เขตอาคารที่สูงผิดปกติถูกกดลงใกล้ระดับที่โล่ง', () => {
+  const T = require('../js/terrain.js');
+  const w = 60, h = 60, elev = new Float32Array(w * h), lu = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const town = x > 20 && x < 40 && y > 20 && y < 40;
+    lu[y * w + x] = town ? 5 : 4;
+    elev[y * w + x] = town ? 15 : 11;
+  }
+  const r = T.bareEarth({ w, h, elev, z: 12, y0: 0 }, lu, { blockPx: 30, tolM: 0.5 });
+  assert.ok(Math.abs(r.elev[30 * w + 30] - 11.5) < 1e-6, 'เมืองต้องเหลือ 11.5 ม.');
+  assert.strictEqual(r.elev[5 * w + 5], 11, 'ที่โล่งไม่เปลี่ยน');
+  const r2 = T.bareEarth({ w, h, elev, z: 12, y0: 0 }, lu, { blockPx: 30, tolM: 0.5, maxDropM: 2 });
+  assert.strictEqual(r2.elev[30 * w + 30], 13, 'ลดไม่เกิน maxDropM');
+});
