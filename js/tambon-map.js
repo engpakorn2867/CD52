@@ -193,7 +193,8 @@
     });
     // ตำบลในอำเภอบ้านโป่ง (แบบแผนที่ถนน: ระบายโปร่งแสงให้เห็นถนนข้างใต้)
     var STREET_FILL = { red: 'rgba(235,64,52,0.42)', yellow: 'rgba(255,232,0,0.55)', gray: 'rgba(150,150,150,0.30)' };
-    bp.forEach(function (f) {
+    var plain = cfg.colorMode === 'plain';
+    if (!plain) bp.forEach(function (f) {
       var c = COLORS[f.properties.cls] || COLORS.gray;
       var dim = cfg.focus && cfg.focus.indexOf(f.properties.th) < 0;
       pathFeature(f);
@@ -240,6 +241,55 @@
       } else { ctx.strokeStyle = 'rgba(40,40,40,0.35)'; ctx.lineWidth = 0.6; }
       ctx.stroke(); ctx.setLineDash([]);
     });
+    // ตำบลที่เน้นในโหมดไม่ระบายสี: เส้นขอบเข้มให้เห็นชัด
+    if (plain && cfg.focus) focus.forEach(function (f) {
+      pathFeature(f); ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.setLineDash([12, 5]); ctx.stroke(); ctx.setLineDash([]);
+    });
+    // หน่วยงานรับผิดชอบ: ระบายสี + กรอบหนาตามสีหน่วยงาน (ทั้งตำบล หรือกรอบที่วาดเอง)
+    var agencies = {};
+    (cfg.agencies || []).forEach(function (a) { agencies[a.id] = a; });
+    function rgba(hex, a) {
+      var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '') || [0, 'e5', '39', '35'];
+      return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + a + ')';
+    }
+    var assign = cfg.assign || {}, used = {};
+    function inView(lon, lat) { var q = P(lon, lat); return q[0] >= mapX && q[0] <= mapX + mapW && q[1] >= mapY && q[1] <= mapY + mapH; }
+    bp.forEach(function (f) {
+      var a = agencies[assign[f.properties.th]];
+      if (!a) return;
+      pathFeature(f);
+      ctx.fillStyle = rgba(a.color, 0.33); ctx.fill('evenodd');
+      ctx.strokeStyle = a.color; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.stroke();
+      var lp = f.properties.labelAt || (f.properties.labelAt = labelPoint(f));
+      if (inView(lp[0], lp[1]) || (cfg.focus && cfg.focus.indexOf(f.properties.th) >= 0)) {
+        (used[a.id] = used[a.id] || { tambons: [], zones: 0 }).tambons.push(f.properties.th);
+      }
+    });
+    function zonePath(pts) {
+      ctx.beginPath();
+      pts.forEach(function (c, i) { var q = P(c[0], c[1]); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+      ctx.closePath();
+    }
+    var zoneLabels = [];
+    (cfg.zones || []).forEach(function (z) {
+      var a = agencies[z.agency];
+      if (!a || !z.pts || z.pts.length < 3) return;
+      zonePath(z.pts);
+      ctx.fillStyle = rgba(a.color, 0.30); ctx.fill();
+      ctx.strokeStyle = a.color; ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.stroke();
+      var cx = 0, cy2 = 0; z.pts.forEach(function (c) { cx += c[0]; cy2 += c[1]; });
+      cx /= z.pts.length; cy2 /= z.pts.length;
+      if (inView(cx, cy2)) { (used[a.id] = used[a.id] || { tambons: [], zones: 0 }).zones++; zoneLabels.push([z.label || a.name, cx, cy2, a.color]); }
+    });
+    // กรอบที่กำลังวาด
+    if (cfg.draft && cfg.draft.pts.length) {
+      var da = agencies[cfg.draft.agency] || { color: '#e53935' };
+      ctx.beginPath();
+      cfg.draft.pts.forEach(function (c, i) { var q = P(c[0], c[1]); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+      ctx.strokeStyle = da.color; ctx.lineWidth = 3; ctx.setLineDash([8, 5]); ctx.stroke(); ctx.setLineDash([]);
+      cfg.draft.pts.forEach(function (c) { var q = P(c[0], c[1]); ctx.beginPath(); ctx.arc(q[0], q[1], 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = da.color; ctx.lineWidth = 2.5; ctx.stroke(); });
+    }
+    cfg._used = used;
     if (street) drawBaseLabels(ctx, cfg.basemap, P, mapX, mapY, mapW, mapH, placed0, cfg.focus ? 12 : 10.5, cfg.focus ? 160 : 110);
 
     // ชื่อตำบล
@@ -279,7 +329,7 @@
       var lp = f.properties.labelAt || (f.properties.labelAt = labelPoint(f));
       var dim = cfg.focus && cfg.focus.indexOf(f.properties.th) < 0;
       var c = COLORS[f.properties.cls] || COLORS.gray;
-      label(f.properties.th, dim ? null : '(ต.' + f.properties.en + ')', lp[0], lp[1], dim ? '#555' : (street ? '#111' : c.text), dim ? Math.round(fs * 0.7) : fs, !dim);
+      label(f.properties.th, dim ? null : '(ต.' + f.properties.en + ')', lp[0], lp[1], dim ? '#555' : (street || plain ? '#111' : c.text), dim ? Math.round(fs * 0.7) : fs, !dim);
     });
     if (cfg.focus) {
       // ชื่อตำบลข้างเคียงนอกอำเภอ
@@ -290,6 +340,7 @@
         label(f.properties.th, null, lp[0], lp[1], '#8a8a8a', 14, false);
       });
     }
+    zoneLabels.forEach(function (z) { label(z[0], null, z[1], z[2], '#111', cfg.focus ? 18 : 14, true); });
     // ป้ายแม่น้ำ
     var mid = cfg.river[Math.floor(cfg.river.length * (cfg.focus ? 0.5 : 0.28))];
     var rp = (function () {
@@ -324,6 +375,7 @@
     // ที่มา
     ctx.font = '400 12px "Sarabun","Noto Sans Thai",Tahoma,sans-serif'; ctx.fillStyle = '#777'; ctx.textAlign = 'left';
     ctx.fillText(cfg.note || '', PAD, H - 14);
+    return { P: P, inv: inv, map: [mapX, mapY, mapW, mapH] };
   }
 
   // แผนที่พื้นฐานแบบเส้นถนนสีเทา (คล้ายแผนที่เขตของหน่วยงาน)
@@ -449,7 +501,50 @@
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     var red = bp.filter(function (f) { return f.properties.cls === 'red'; }).sort(function (a, b) { return b.properties.riverKm - a.properties.riverKm; });
     var yel = bp.filter(function (f) { return f.properties.cls === 'yellow'; });
-    if (!cfg.focus) {
+    var usedIds = Object.keys(cfg._used || {});
+    var legendTop = y + h - (cfg.colorMode === 'plain' ? 66 : 150);
+    if (usedIds.length) {
+      if (cfg.focus) {
+        focus.forEach(function (f) {
+          ctx.font = '700 22px ' + font; ctx.fillStyle = '#222';
+          ctx.fillText('ต.' + f.properties.th + ' (' + f.properties.en + ')', lx, cy); cy += 26;
+          ctx.font = '400 15px ' + font; ctx.fillStyle = '#555';
+          ctx.fillText('พื้นที่ ~' + f.properties.areaKm2.toFixed(1) + ' ตร.กม. · ' + (f.properties.cls === 'red'
+            ? (f.properties.riverKm >= 0.05 ? 'แม่น้ำแม่กลองไหลผ่าน ~' + f.properties.riverKm.toFixed(1) + ' กม.' : 'ติดแนวแม่น้ำแม่กลอง') : 'ไม่ติดแม่น้ำ'), lx, cy);
+          cy += 30;
+        });
+      }
+      ctx.font = '700 21px ' + font; ctx.fillStyle = '#1a1a1a';
+      ctx.fillText('หน่วยงานรับผิดชอบ', lx, cy); cy += 30;
+      (cfg.agencies || []).forEach(function (a) {
+        var u = cfg._used[a.id];
+        if (!u || cy > legendTop - 60) return;
+        ctx.fillStyle = a.color; roundRect(ctx, lx, cy - 17, 24, 24, 5); ctx.fill();
+        ctx.fillStyle = '#1a1a1a'; ctx.font = '700 18px ' + font;
+        cy = wrap(ctx, a.name || '(ไม่ระบุชื่อหน่วยงาน)', lx + 34, cy, w - 78, 22);
+        ctx.font = '400 15px ' + font; ctx.fillStyle = '#333';
+        if (a.person) cy = wrap(ctx, 'ผู้รับผิดชอบ: ' + a.person, lx + 34, cy, w - 78, 20);
+        if (a.phone) { ctx.font = '700 16px ' + font; ctx.fillStyle = '#b71c1c'; cy = wrap(ctx, '☎ ' + a.phone, lx + 34, cy, w - 78, 21); }
+        ctx.font = '400 14px ' + font; ctx.fillStyle = '#555';
+        var area = u.tambons.map(function (t) { return 'ต.' + t; });
+        if (u.zones) area.push('กรอบพื้นที่ ' + u.zones + ' แห่ง');
+        cy = wrap(ctx, 'พื้นที่: ' + area.join(', '), lx + 34, cy, w - 78, 19);
+        if (a.note) cy = wrap(ctx, a.note, lx + 34, cy, w - 78, 19);
+        cy += 10;
+      });
+    } else if (cfg.colorMode === 'plain') {
+      if (cfg.focus) focus.forEach(function (f) {
+        ctx.font = '700 22px ' + font; ctx.fillStyle = '#222';
+        ctx.fillText('ต.' + f.properties.th + ' (' + f.properties.en + ')', lx, cy); cy += 28;
+        ctx.font = '400 16px ' + font; ctx.fillStyle = '#444';
+        ctx.fillText('พื้นที่ ~' + f.properties.areaKm2.toFixed(1) + ' ตร.กม.', lx, cy); cy += 24;
+        ctx.fillText(f.properties.cls === 'red' ? (f.properties.riverKm >= 0.05 ? 'แม่น้ำแม่กลองไหลผ่าน ~' + f.properties.riverKm.toFixed(1) + ' กม.' : 'ติดแนวแม่น้ำแม่กลอง') : 'ไม่ติดแม่น้ำแม่กลอง', lx, cy); cy += 24;
+        cy = wrap(ctx, 'ติดกับ: ' + f.properties.neighbors.map(function (n) { return 'ต.' + n; }).join(', '), lx, cy, w - 44, 21);
+        cy += 14;
+      });
+      ctx.font = '400 14px ' + font; ctx.fillStyle = '#777';
+      cy = wrap(ctx, 'ยังไม่ได้กำหนดหน่วยงานรับผิดชอบ — ใช้เครื่องมือ “คลิกตำบล” หรือ “วาดกรอบ” ด้านล่างแผนที่', lx, cy + 6, w - 44, 20);
+    } else if (!cfg.focus) {
       ctx.font = '700 22px ' + font; ctx.fillStyle = '#b71c1c';
       ctx.fillText('ตำบลที่ได้รับผลกระทบ (' + red.length + ' ตำบล)', lx, cy); cy += 12;
       ctx.font = '400 13px ' + font; ctx.fillStyle = '#666';
@@ -498,11 +593,12 @@
       cy = wrap(ctx, 'ตำบลอื่นแสดงจางลงเพื่อให้เห็นตำแหน่งเทียบกับแนวแม่น้ำ', lx, cy + 4, w - 44, 20);
     }
     // คำอธิบายสัญลักษณ์
-    var ly = y + h - 150;
+    var ly = legendTop;
     ctx.strokeStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(lx, ly - 18); ctx.lineTo(x + w - 22, ly - 18); ctx.stroke();
     ctx.font = '700 16px ' + font; ctx.fillStyle = '#333'; ctx.fillText('คำอธิบายสัญลักษณ์', lx, ly + 2); ly += 28;
-    [[COLORS.water, 'แม่น้ำแม่กลอง'], [COLORS.red.fill, 'ตำบลติด/แม่น้ำไหลผ่าน (ได้รับผลกระทบ)'],
-      [COLORS.yellow.fill, 'ตำบลติดกับตำบลริมแม่น้ำ (เฝ้าระวัง)'], [COLORS.gray.fill, 'ตำบลอื่นใน อ.บ้านโป่ง']].forEach(function (it) {
+    var items = cfg.colorMode === 'plain' ? [[COLORS.water, 'แม่น้ำแม่กลอง']] : [[COLORS.water, 'แม่น้ำแม่กลอง'], [COLORS.red.fill, 'ตำบลติด/แม่น้ำไหลผ่าน (ได้รับผลกระทบ)'],
+      [COLORS.yellow.fill, 'ตำบลติดกับตำบลริมแม่น้ำ (เฝ้าระวัง)'], [COLORS.gray.fill, 'ตำบลอื่นใน อ.บ้านโป่ง']];
+    items.forEach(function (it) {
       ctx.fillStyle = it[0]; roundRect(ctx, lx, ly - 15, 30, 20, 4); ctx.fill(); ctx.strokeStyle = '#888'; ctx.stroke();
       ctx.fillStyle = '#333'; ctx.font = '400 15px ' + font; ctx.fillText(it[1], lx + 42, ly); ly += 28;
     });

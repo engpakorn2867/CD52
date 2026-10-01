@@ -5,31 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>แผนที่ตำบลริมแม่กลอง บ้านโป่ง</title>
   <style>
-    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; }
+    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; --bad: #c62828; }
     @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; }
+      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text);
       font-family: "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif; }
     header { padding: 14px 16px 4px; }
     h1 { font-size: 20px; margin: 0 0 4px; }
+    h2 { font-size: 16px; margin: 0; }
     p { margin: 4px 0; color: var(--muted); font-size: 14px; }
     .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
-    button, select { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
-      background: var(--panel); color: var(--text); cursor: pointer; }
+    button, select, input { font: inherit; font-size: 14px; border-radius: 6px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--text); }
+    button, select { padding: 6px 10px; cursor: pointer; }
+    input { padding: 5px 7px; }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .card { margin: 8px 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-    .card h2 { font-size: 16px; margin: 2px 4px 8px; }
-    canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
-    .msg { font-size: 13px; color: var(--muted); padding: 0 16px; }
+    button.on { background: var(--text); color: var(--panel); border-color: var(--text); }
+    button.danger { color: var(--bad); }
+    .card { margin: 8px 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    .card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 4px 8px; }
+    .card-head h2 { flex: 1 1 220px; }
+    .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
+    canvas { width: 100%; height: auto; display: block; border-radius: 6px; touch-action: manipulation; }
+    canvas.assign, canvas.erase { cursor: pointer; }
+    canvas.draw { cursor: crosshair; }
+    .msg { font-size: 13px; color: var(--muted); padding: 0 16px; min-height: 18px; }
     a { color: var(--accent); }
+    table.ag { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table.ag th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px; border-bottom: 1px solid var(--line); }
+    table.ag td { padding: 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    table.ag input[type=text], table.ag input[type=tel] { width: 100%; min-width: 90px; }
+    table.ag input[type=color] { width: 40px; height: 32px; padding: 2px; }
+    .wrap-table { overflow-x: auto; }
+    .hint { font-size: 13px; color: var(--muted); margin: 6px 4px; }
+    .assigns { font-size: 13px; color: var(--muted); margin: 6px 4px 0; }
   </style>
 </head>
 <body>
   <header>
-    <h1>แผนที่ตำบล อ.บ้านโป่ง ตามความสัมพันธ์กับแม่น้ำแม่กลอง</h1>
-    <p>สีฟ้า = แม่น้ำแม่กลอง · สีแดง = ตำบลที่ติด/แม่น้ำไหลผ่าน · สีเหลือง = ตำบลที่ติดกับตำบลริมแม่น้ำ · กด “บันทึกเป็นรูป” เพื่อดาวน์โหลด PNG</p>
+    <h1>แผนที่ตำบล อ.บ้านโป่ง และหน่วยงานรับผิดชอบ</h1>
+    <p>กำหนดหน่วยงานรับผิดชอบด้านล่าง แล้วใช้เครื่องมือ “คลิกตำบล” หรือ “วาดกรอบ” บนแผนที่แต่ละภาพ · กด “บันทึกเป็นรูป” เพื่อดาวน์โหลด PNG</p>
   </header>
   <div class="bar">
     <label>พื้นหลัง
@@ -41,16 +58,27 @@
     </label>
     <a href="index.html">← กลับไปแผนที่คาดการณ์น้ำท่วม</a>
   </div>
-  <div id="msg" class="msg"></div>
 
   <div class="card">
-    <h2>1. ภาพรวม อ.บ้านโป่ง <button type="button" class="primary" data-save="cvAll">บันทึกเป็นรูป (PNG)</button></h2>
-    <canvas id="cvAll" width="1800" height="1200" aria-label="แผนที่ตำบลทั้งอำเภอบ้านโป่ง"></canvas>
+    <div class="card-head">
+      <h2>หน่วยงานรับผิดชอบ</h2>
+      <button type="button" id="addAgency">+ เพิ่มหน่วยงาน</button>
+      <button type="button" id="exportJson">ส่งออกข้อมูล (.json)</button>
+      <button type="button" id="importBtn">นำเข้าข้อมูล</button>
+      <input type="file" id="importJson" accept=".json,application/json" hidden>
+    </div>
+    <div class="wrap-table">
+      <table class="ag">
+        <thead><tr><th>ใช้</th><th>สี</th><th>หน่วยงาน</th><th>ผู้รับผิดชอบ</th><th>เบอร์โทร</th><th>หมายเหตุ</th><th></th></tr></thead>
+        <tbody id="agencyRows"></tbody>
+      </table>
+    </div>
+    <p class="hint">เลือก “ใช้” ที่หน่วยงาน แล้ว: <b>คลิกตำบล</b> = กำหนด/ยกเลิกหน่วยงานให้ทั้งตำบล · <b>วาดกรอบ</b> = คลิกทีละจุดรอบพื้นที่ แล้วกด “เสร็จ” (หรือดับเบิลคลิก) ·
+      <b>ลบกรอบ</b> = คลิกในกรอบที่ต้องการลบ · ข้อมูลบันทึกในเบราว์เซอร์นี้อัตโนมัติ ใช้ “ส่งออกข้อมูล” เพื่อเก็บสำรอง/ส่งต่อ</p>
   </div>
-  <div class="card">
-    <h2>2. เจาะจง ต.คุ้งพยอม และ ต.บ้านม่วง <button type="button" class="primary" data-save="cvFocus">บันทึกเป็นรูป (PNG)</button></h2>
-    <canvas id="cvFocus" width="1800" height="1200" aria-label="แผนที่ตำบลคุ้งพยอมและบ้านม่วง"></canvas>
-  </div>
+  <div id="msg" class="msg" role="status"></div>
+
+  <div id="views"></div>
 
   <script src="data/banpong-tambons.js"></script>
   <script src="data/maeklong-river.js"></script>
@@ -59,19 +87,174 @@
   <script src="js/tambon-map.js"></script>
   <script>
   (function () {
+    'use strict';
     var TM = window.TambonMap, LC = window.LANDCOVER;
     var features = window.BANPONG_TAMBONS.features, river = window.MAEKLONG_RIVER;
     TM.classify(features, river);
-    var NOTE = 'ที่มา: ขอบเขตตำบล OpenGISData-Thailand (แบบย่อ ไม่ใช่แนวเขตทางกฎหมาย) · แม่น้ำ: ESA WorldCover 2021 (CC BY 4.0) + แนวร่องน้ำจาก DEM · จัดทำเพื่อประกอบการเฝ้าระวังอุทกภัย';
+    var NOTE = 'ที่มา: ขอบเขตตำบล OpenGISData-Thailand (แบบย่อ ไม่ใช่แนวเขตทางกฎหมาย) · แม่น้ำ: ESA WorldCover 2021 (CC BY 4.0) + แนวร่องน้ำจาก DEM';
     var BASE_NOTE = ' · แผนที่ถนน/แหล่งน้ำ: Overture Maps, © OpenStreetMap contributors (ODbL)';
     var VIEWS = [
-      { id: 'cvAll', focus: null, title: 'ตำบลที่ได้รับผลกระทบจากแม่น้ำแม่กลอง อ.บ้านโป่ง จ.ราชบุรี',
-        subtitle: 'แบ่งตามที่ตั้งเทียบแม่น้ำแม่กลอง: ติด/แม่น้ำไหลผ่าน (แดง) · ติดกับตำบลริมน้ำ (เหลือง) · อื่นๆ (เทา)' },
-      { id: 'cvFocus', focus: ['คุ้งพยอม', 'บ้านม่วง'], title: 'ต.คุ้งพยอม และ ต.บ้านม่วง อ.บ้านโป่ง จ.ราชบุรี',
-        subtitle: 'แนวแม่น้ำแม่กลองที่ไหลผ่านและตำบลโดยรอบ' }
+      { id: 'all', focus: null, mode: 'river', file: 'banpong-tambon',
+        title: 'ตำบลและหน่วยงานรับผิดชอบ อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' },
+      { id: 'banmuang', focus: ['บ้านม่วง'], mode: 'plain', file: 'ban-muang',
+        title: 'ต.บ้านม่วง อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'แนวแม่น้ำแม่กลองและพื้นที่รับผิดชอบ' },
+      { id: 'khungphayom', focus: ['คุ้งพยอม'], mode: 'plain', file: 'khung-phayom',
+        title: 'ต.คุ้งพยอม อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'แนวแม่น้ำแม่กลองและพื้นที่รับผิดชอบ' }
     ];
 
-    // แปลงภาพการใช้ที่ดิน (ฝังเป็น PNG) เป็นรหัสชั้น
+    // ---------------- ข้อมูลหน่วยงาน (บันทึกในเบราว์เซอร์) ----------------
+    var KEY = 'banpong-tambon-agencies-v1';
+    var PALETTE = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00897b', '#6d4c41', '#d81b60'];
+    var store = { agencies: [], assign: {}, zones: [], active: null };
+    function load() {
+      try { var v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (v && v.agencies) store = Object.assign(store, v); } catch (e) { /* ไม่มีที่เก็บ */ }
+      normalize();
+    }
+    function normalize() {
+      if (!store.agencies.length) addAgency();
+      if (!store.active || !store.agencies.some(function (a) { return a.id === store.active; })) store.active = store.agencies[0].id;
+    }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* ไม่มีที่เก็บ */ } }
+    function uid() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    function addAgency() {
+      var a = { id: uid(), color: PALETTE[store.agencies.length % PALETTE.length], name: 'หน่วยงานที่ ' + (store.agencies.length + 1), person: '', phone: '', note: '' };
+      store.agencies.push(a); store.active = a.id;
+      return a;
+    }
+    function msg(t) { document.getElementById('msg').textContent = t || ''; }
+
+    function renderRows() {
+      var tb = document.getElementById('agencyRows');
+      tb.textContent = '';
+      store.agencies.forEach(function (a) {
+        var tr = document.createElement('tr');
+        function cell(el) { var td = document.createElement('td'); td.appendChild(el); tr.appendChild(td); return el; }
+        var r = cell(document.createElement('input')); r.type = 'radio'; r.name = 'active'; r.checked = a.id === store.active;
+        r.title = 'ใช้หน่วยงานนี้กับเครื่องมือคลิกตำบล/วาดกรอบ';
+        r.onchange = function () { store.active = a.id; save(); };
+        var c = cell(document.createElement('input')); c.type = 'color'; c.value = a.color; c.title = 'สีไฮไลต์';
+        c.oninput = function () { a.color = c.value; changed(); };
+        [['name', 'text', 'ชื่อหน่วยงาน'], ['person', 'text', 'ชื่อผู้รับผิดชอบ/ตำแหน่ง'], ['phone', 'tel', '0xx-xxx-xxxx'], ['note', 'text', 'หมายเหตุ']].forEach(function (f) {
+          var i = cell(document.createElement('input')); i.type = f[1]; i.placeholder = f[2]; i.value = a[f[0]] || '';
+          i.dataset.field = f[0];
+          if (f[0] === 'phone') i.inputMode = 'tel';
+          i.oninput = function () { a[f[0]] = i.value; changed(); };
+        });
+        var del = cell(document.createElement('button')); del.type = 'button'; del.className = 'danger'; del.textContent = 'ลบ';
+        del.onclick = function () {
+          if (!confirm('ลบ “' + (a.name || 'หน่วยงาน') + '” และพื้นที่ที่กำหนดให้หน่วยงานนี้?')) return;
+          store.agencies = store.agencies.filter(function (x) { return x !== a; });
+          Object.keys(store.assign).forEach(function (t) { if (store.assign[t] === a.id) delete store.assign[t]; });
+          store.zones = store.zones.filter(function (z) { return z.agency !== a.id; });
+          normalize(); renderRows(); changed();
+        };
+        tb.appendChild(tr);
+      });
+    }
+    var redrawTimer = null;
+    function changed() { save(); clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 150); }
+
+    // ---------------- การ์ดแผนที่ ----------------
+    var cards = {};
+    function buildCards() {
+      var host = document.getElementById('views');
+      VIEWS.forEach(function (v) {
+        var card = document.createElement('div'); card.className = 'card';
+        var head = document.createElement('div'); head.className = 'card-head';
+        var h = document.createElement('h2'); h.textContent = v.title; head.appendChild(h);
+        var mode = document.createElement('select');
+        mode.setAttribute('aria-label', 'การระบายสี');
+        [['river', 'ระบายสีตามแม่น้ำ (แดง/เหลือง)'], ['plain', 'ไม่ระบายสี']].forEach(function (o) {
+          var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; mode.appendChild(op);
+        });
+        mode.value = v.mode;
+        mode.onchange = function () { v.mode = mode.value; draw(v); };
+        head.appendChild(mode);
+        var saveBtn = document.createElement('button'); saveBtn.type = 'button'; saveBtn.className = 'primary'; saveBtn.textContent = 'บันทึกเป็นรูป (PNG)';
+        saveBtn.dataset.save = v.id;
+        saveBtn.onclick = function () { exportPng(v); };
+        head.appendChild(saveBtn);
+        card.appendChild(head);
+        var cv = document.createElement('canvas'); cv.width = 1800; cv.height = 1200; cv.id = 'cv-' + v.id;
+        cv.setAttribute('aria-label', v.title);
+        card.appendChild(cv);
+        var tools = document.createElement('div'); tools.className = 'tools';
+        tools.appendChild(document.createTextNode('เครื่องมือ:'));
+        var btns = {};
+        [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ']].forEach(function (t) {
+          var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1]; b.dataset.tool = t[0];
+          b.onclick = function () { setTool(v, t[0]); };
+          tools.appendChild(b); btns[t[0]] = b;
+        });
+        var done = document.createElement('button'); done.type = 'button'; done.textContent = 'เสร็จ (ปิดกรอบ)'; done.hidden = true;
+        done.onclick = function () { finishDraft(v); };
+        var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'ยกเลิกกรอบที่วาด'; cancel.hidden = true;
+        cancel.onclick = function () { v.draft = null; done.hidden = cancel.hidden = true; draw(v); };
+        tools.appendChild(done); tools.appendChild(cancel);
+        card.appendChild(tools);
+        var assigns = document.createElement('div'); assigns.className = 'assigns'; card.appendChild(assigns);
+        host.appendChild(card);
+        cards[v.id] = { cv: cv, btns: btns, done: done, cancel: cancel, assigns: assigns };
+        cv.addEventListener('click', function (e) { onClick(v, e); });
+        cv.addEventListener('dblclick', function (e) { if (v.tool === 'draw') { e.preventDefault(); finishDraft(v); } });
+        setTool(v, 'none', true);
+      });
+    }
+    function setTool(v, t, silent) {
+      v.tool = t; v.draft = null;
+      var c = cards[v.id];
+      Object.keys(c.btns).forEach(function (k) { c.btns[k].classList.toggle('on', k === t); });
+      c.cv.className = t;
+      c.done.hidden = c.cancel.hidden = true;
+      if (!silent) draw(v);
+    }
+    function canvasLonLat(v, e) {
+      var cv = cards[v.id].cv, r = cv.getBoundingClientRect();
+      var px = (e.clientX - r.left) * cv.width / r.width, py = (e.clientY - r.top) * cv.height / r.height;
+      var m = v.proj && v.proj.map;
+      if (!m || px < m[0] || px > m[0] + m[2] || py < m[1] || py > m[1] + m[3]) return null;
+      return v.proj.inv(px, py);
+    }
+    function activeAgency() { return store.agencies.filter(function (a) { return a.id === store.active; })[0]; }
+    function onClick(v, e) {
+      if (v.tool === 'none') return;
+      var ll = canvasLonLat(v, e);
+      if (!ll) return;
+      var a = activeAgency();
+      if (v.tool === 'assign') {
+        var f = features.filter(function (f) { return f.properties.role === 'banpong' && TM.pointInFeature(ll[0], ll[1], f); })[0];
+        if (!f) { msg('คลิกในพื้นที่ตำบลของ อ.บ้านโป่ง'); return; }
+        var th = f.properties.th;
+        if (store.assign[th] === a.id) { delete store.assign[th]; msg('ยกเลิกหน่วยงานของ ต.' + th); }
+        else { store.assign[th] = a.id; msg('กำหนด ต.' + th + ' → ' + (a.name || 'หน่วยงาน')); }
+        changed();
+      } else if (v.tool === 'draw') {
+        if (e.detail > 1) return; // คลิกที่สองของดับเบิลคลิก
+        v.draft = v.draft || { agency: a.id, pts: [] };
+        v.draft.pts.push(ll);
+        cards[v.id].done.hidden = cards[v.id].cancel.hidden = false;
+        msg('วาดกรอบ: ' + v.draft.pts.length + ' จุด (อย่างน้อย 3 จุด แล้วกด “เสร็จ”)');
+        draw(v);
+      } else if (v.tool === 'erase') {
+        for (var i = store.zones.length - 1; i >= 0; i--) {
+          var ring = store.zones[i].pts.concat([store.zones[i].pts[0]]);
+          if (TM.pointInFeature(ll[0], ll[1], { geometry: { coordinates: [[ring]] } })) {
+            store.zones.splice(i, 1); msg('ลบกรอบแล้ว'); changed(); return;
+          }
+        }
+        msg('ไม่พบกรอบตรงจุดที่คลิก');
+      }
+    }
+    function finishDraft(v, label) {
+      if (!v.draft || v.draft.pts.length < 3) { msg('ต้องมีอย่างน้อย 3 จุด'); return; }
+      if (label == null) label = prompt('ชื่อกรอบพื้นที่ (เว้นว่าง = ใช้ชื่อหน่วยงาน)', '') || '';
+      store.zones.push({ id: uid(), agency: v.draft.agency, pts: v.draft.pts, label: String(label).trim() });
+      v.draft = null;
+      cards[v.id].done.hidden = cards[v.id].cancel.hidden = true;
+      msg('เพิ่มกรอบพื้นที่แล้ว'); changed();
+    }
+
+    // ---------------- วาด ----------------
     function loadLandcover() {
       return new Promise(function (res) {
         if (!LC) return res(null);
@@ -87,64 +270,84 @@
         img.src = LC.png;
       });
     }
-
-    // ภาพดาวเทียมพื้นหลัง (ต้องอนุญาต CORS จึงบันทึกเป็นรูปได้)
-    function loadTiles(view, canvas) {
-      var bp = features.filter(function (f) { return f.properties.role === 'banpong' && (!view.focus || view.focus.indexOf(f.properties.th) >= 0); });
-      var bb = TM.bboxOf(bp), pad = view.focus ? 0.6 : 0.15;
-      var w = bb[2] - bb[0], h = bb[3] - bb[1];
-      var lon0 = bb[0] - w * pad, lon1 = bb[2] + w * pad, lat0 = bb[1] - h * pad, lat1 = bb[3] + h * pad;
-      var z = view.focus ? 14 : 12, n = Math.pow(2, z), jobs = [];
-      var tx0 = Math.floor(TM.mx(lon0) * n), tx1 = Math.floor(TM.mx(lon1) * n), ty0 = Math.floor(TM.my(lat1) * n), ty1 = Math.floor(TM.my(lat0) * n);
-      for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++) {
-        (function (x, y) {
-          jobs.push(new Promise(function (res) {
-            var img = new Image(); img.crossOrigin = 'anonymous';
-            img.onload = function () { res({ img: img, x: x, y: y, z: z }); };
-            img.onerror = function () { res(null); };
-            img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
-          }));
-        })(x, y);
-      }
+    function loadTiles(v) {
+      var bp = features.filter(function (f) { return f.properties.role === 'banpong' && (!v.focus || v.focus.indexOf(f.properties.th) >= 0); });
+      var bb = TM.bboxOf(bp), pad = v.focus ? 0.6 : 0.15, w = bb[2] - bb[0], h = bb[3] - bb[1];
+      var z = v.focus ? 14 : 12, n = Math.pow(2, z), jobs = [];
+      var tx0 = Math.floor(TM.mx(bb[0] - w * pad) * n), tx1 = Math.floor(TM.mx(bb[2] + w * pad) * n);
+      var ty0 = Math.floor(TM.my(bb[3] + h * pad) * n), ty1 = Math.floor(TM.my(bb[1] - h * pad) * n);
+      for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++) (function (x, y) {
+        jobs.push(new Promise(function (res) {
+          var img = new Image(); img.crossOrigin = 'anonymous';
+          img.onload = function () { res({ img: img, x: x, y: y, z: z }); };
+          img.onerror = function () { res(null); };
+          img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
+        }));
+      })(x, y);
       return Promise.all(jobs).then(function (t) { return t.filter(Boolean); });
     }
-
-    var lcPromise = loadLandcover();
-    function draw() {
-      var bgv = document.getElementById('bg').value, useSat = bgv === 'sat';
-      lcPromise.then(function (lc) {
-        VIEWS.forEach(function (v) {
-          var cv = document.getElementById(v.id);
-          var tilesP = useSat ? loadTiles(v, cv) : Promise.resolve([]);
-          tilesP.then(function (tiles) {
-            TM.render({ canvas: cv, features: features, river: river, landcover: lc, focus: v.focus,
-              title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
-              basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null });
-            if (useSat && !tiles.length) document.getElementById('msg').textContent = 'โหลดภาพดาวเทียมไม่ได้ — แสดงแบบเรียบแทน';
+    var lcPromise = loadLandcover(), tileCache = {};
+    function draw(v) {
+      var bgv = document.getElementById('bg').value;
+      return lcPromise.then(function (lc) {
+        var tilesP = bgv === 'sat' ? (tileCache[v.id] = tileCache[v.id] || loadTiles(v)) : Promise.resolve([]);
+        return tilesP.then(function (tiles) {
+          if (bgv === 'sat' && !tiles.length) msg('โหลดภาพดาวเทียมไม่ได้ — แสดงแบบเรียบแทน');
+          var cfg = { canvas: cards[v.id].cv, features: features, river: river, landcover: lc, focus: v.focus,
+            title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
+            basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.mode,
+            agencies: store.agencies, assign: store.assign, zones: store.zones, draft: v.draft };
+          v.proj = TM.render(cfg);
+          var list = Object.keys(cfg._used || {}).map(function (id) {
+            var a = store.agencies.filter(function (x) { return x.id === id; })[0], u = cfg._used[id];
+            return (a.name || 'หน่วยงาน') + ': ' + u.tambons.map(function (t) { return 'ต.' + t; }).concat(u.zones ? ['กรอบ ' + u.zones + ' แห่ง'] : []).join(', ');
           });
+          cards[v.id].assigns.textContent = list.length ? 'ในภาพนี้ — ' + list.join(' · ') : '';
         });
       });
     }
+    function drawAll() { return Promise.all(VIEWS.map(draw)); }
+    function exportPng(v) {
+      var cv = cards[v.id].cv;
+      try {
+        cv.toBlob(function (blob) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = v.file + '.png';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+        }, 'image/png');
+      } catch (e) {
+        msg('บันทึกภาพพร้อมพื้นหลังดาวเทียมไม่ได้ (ผู้ให้บริการไม่อนุญาต) — เลือกพื้นหลังแบบอื่นแล้วบันทึกอีกครั้ง');
+      }
+    }
 
-    document.getElementById('bg').onchange = function () { document.getElementById('msg').textContent = ''; draw(); };
-    document.querySelectorAll('[data-save]').forEach(function (b) {
-      b.onclick = function () {
-        var cv = document.getElementById(b.dataset.save);
-        try {
-          cv.toBlob(function (blob) {
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = (b.dataset.save === 'cvAll' ? 'banpong-tambon-maeklong' : 'khung-phayom-ban-muang') + '.png';
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-          }, 'image/png');
-        } catch (e) {
-          document.getElementById('msg').textContent = 'บันทึกภาพพร้อมพื้นหลังดาวเทียมไม่ได้ (ผู้ให้บริการไม่อนุญาต) — เลือกพื้นหลังแบบเรียบแล้วบันทึกอีกครั้ง';
-        }
-      };
-    });
-    window.tambonMap = { draw: draw, features: features };
-    draw();
+    // ---------------- ส่งออก/นำเข้า ----------------
+    document.getElementById('exportJson').onclick = function () {
+      var blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'banpong-agencies.json';
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+    document.getElementById('importBtn').onclick = function () { document.getElementById('importJson').click(); };
+    document.getElementById('importJson').onchange = function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      f.text().then(function (t) {
+        var v = JSON.parse(t);
+        if (!v || !Array.isArray(v.agencies)) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
+        store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active };
+        normalize(); save(); renderRows(); drawAll(); msg('นำเข้าข้อมูลแล้ว');
+      }).catch(function (err) { msg('นำเข้าไม่สำเร็จ: ' + err.message); });
+      e.target.value = '';
+    };
+    document.getElementById('addAgency').onclick = function () { addAgency(); renderRows(); save(); };
+    document.getElementById('bg').onchange = function () { msg(''); drawAll(); };
+
+    load(); renderRows(); buildCards(); drawAll();
+    // สำหรับทดสอบ
+    window.tambonMap = {
+      store: function () { return store; }, views: VIEWS, draw: drawAll,
+      setTool: function (id, t) { setTool(VIEWS.filter(function (v) { return v.id === id; })[0], t); },
+      finishDraft: function (id, label) { finishDraft(VIEWS.filter(function (v) { return v.id === id; })[0], label); }
+    };
   })();
   </script>
 </body>
