@@ -387,6 +387,24 @@
       label(nm, null, ll[0], ll[1], '#111', fz, true);
     });
     cfg._teams = teamsShown;
+    // จุดน้ำเข้า (ท่อ ▼ / บึง ●) และจุดสำรวจน้ำท่วมจริง (◆)
+    (cfg.floodPoints || []).forEach(function (pt) {
+      if (!inView(pt.lon, pt.lat)) return;
+      var q = P(pt.lon, pt.lat), r = cfg.focus ? 11 : 8;
+      ctx.save(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff';
+      ctx.beginPath();
+      if (pt.kind === 'drain') { ctx.moveTo(q[0] - r, q[1] - r * 0.8); ctx.lineTo(q[0] + r, q[1] - r * 0.8); ctx.lineTo(q[0], q[1] + r); ctx.closePath(); ctx.fillStyle = pt.off ? '#9e9e9e' : '#7b1fa2'; }
+      else if (pt.kind === 'pond') { ctx.arc(q[0], q[1], r * 0.9, 0, Math.PI * 2); ctx.fillStyle = pt.off ? '#9e9e9e' : '#00838f'; }
+      else { ctx.moveTo(q[0], q[1] - r); ctx.lineTo(q[0] + r, q[1]); ctx.lineTo(q[0], q[1] + r); ctx.lineTo(q[0] - r, q[1]); ctx.closePath(); ctx.fillStyle = '#d50000'; }
+      ctx.fill(); ctx.stroke();
+      if (pt.off) { ctx.beginPath(); ctx.moveTo(q[0] - r, q[1] - r); ctx.lineTo(q[0] + r, q[1] + r); ctx.strokeStyle = '#212121'; ctx.lineWidth = 2; ctx.stroke(); }
+      if (pt.label) {
+        ctx.font = '700 ' + (cfg.focus ? 14 : 12) + 'px "Sarabun","Noto Sans Thai",Tahoma,sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3.5; ctx.strokeStyle = '#fff'; ctx.strokeText(pt.label, q[0] + r + 4, q[1]);
+        ctx.fillStyle = pt.kind === 'obs' ? '#b71c1c' : pt.kind === 'drain' ? '#4a148c' : '#006064'; ctx.fillText(pt.label, q[0] + r + 4, q[1]);
+      }
+      ctx.restore();
+    });
     // ป้ายแม่น้ำ
     var mid = cfg.river[Math.floor(cfg.river.length * (cfg.focus ? 0.5 : 0.28))];
     var rp = (function () {
@@ -551,8 +569,13 @@
     if (!plain) legendItems.push([COLORS.red.fill, 'ตำบลติด/แม่น้ำไหลผ่าน', 'box'], [COLORS.yellow.fill, 'ตำบลติดตำบลริมแม่น้ำ (เฝ้าระวัง)', 'box'], [COLORS.gray.fill, 'ตำบลอื่นใน อ.บ้านโป่ง', 'box']);
     if (cfg.flood && cfg.flood.res) {
       legendItems.push(['rgb(158,202,225)', 'น้ำท่วมลึก < 0.5 ม.', 'box'], ['rgb(66,146,198)', 'ลึก 0.5–1 ม.', 'box'], ['rgb(33,102,172)', 'ลึก 1–2 ม.', 'box'], ['rgb(8,48,107)', 'ลึก > 2 ม.', 'box']);
+      if (cfg.flood.drain) legendItems.push(['rgb(171,71,188)', 'น้ำย้อนท่อ/หนองบึง/จุดที่สำรวจพบน้ำ', 'box']);
       if (cfg.flood.riskM) legendItems.push(['rgba(255,152,0,0.6)', 'เสี่ยงท่วมถ้าน้ำขึ้นอีก ' + cfg.flood.riskM + ' ม.', 'box']);
     }
+    var fpk = {}; (cfg.floodPoints || []).forEach(function (p) { fpk[p.kind] = 1; });
+    if (fpk.drain) legendItems.push(['#7b1fa2', 'ปากท่อ/ประตูระบายน้ำ', 'tri']);
+    if (fpk.pond) legendItems.push(['#00838f', 'หนอง/บึงที่น้ำล้นเข้า', 'pin']);
+    if (fpk.obs) legendItems.push(['#d50000', 'จุดสำรวจน้ำท่วมจริง', 'dia']);
     if (teams.some(function (t) { return t.t.base; })) legendItems.push(['#37474f', 'จุดตั้งชุดปฏิบัติการ (หมายเลขตามรายการ)', 'pin']);
     var legendCols = legendItems.length > 6 ? 2 : 1, legendTop = y + h - 38 - Math.ceil(legendItems.length / legendCols) * 26;
     var hidden = 0;
@@ -598,6 +621,8 @@
       var sum = names ? rows.reduce(function (a, t) { return { rai: a.rai + t.rai, damage: a.damage + t.damage }; }, { rai: 0, damage: 0 }) : r.total;
       ctx.font = '700 16px ' + font; ctx.fillStyle = '#b71c1c';
       cy = wrap(ctx, 'ท่วม ' + fmtRai(sum.rai) + ' ไร่ (' + (sum.rai * 1600 / 1e6).toFixed(1) + ' ตร.กม.) · เสียหาย ~' + fmtBaht(sum.damage), lx, cy + 2, tw, 20);
+      var drainSum = names ? rows.reduce(function (a, t) { return a + t.drainRai; }, 0) : r.total.drainRai;
+      if (drainSum >= 1) { ctx.font = '600 14px ' + font; ctx.fillStyle = '#6a1b9a'; ctx.fillText('ในจำนวนนี้ น้ำย้อนท่อ/หนองบึง/จุดที่สำรวจพบน้ำ ' + fmtRai(drainSum) + ' ไร่', lx, cy + 2); cy += 22; }
       cy += 4;
       var maxRows = names ? rows.length : 8;
       rows.slice(0, maxRows).forEach(function (t) {
@@ -695,6 +720,8 @@
     legendItems.forEach(function (it, i) {
       var ix = lx + Math.floor(i / rowsPer) * colW, iy = ly + (i % rowsPer) * 26;
       if (it[2] === 'pin') { ctx.beginPath(); ctx.arc(ix + 15, iy - 5, 10, 0, Math.PI * 2); ctx.fillStyle = it[0]; ctx.fill(); }
+      else if (it[2] === 'tri') { ctx.beginPath(); ctx.moveTo(ix + 5, iy - 13); ctx.lineTo(ix + 25, iy - 13); ctx.lineTo(ix + 15, iy + 4); ctx.closePath(); ctx.fillStyle = it[0]; ctx.fill(); }
+      else if (it[2] === 'dia') { ctx.beginPath(); ctx.moveTo(ix + 15, iy - 15); ctx.lineTo(ix + 25, iy - 5); ctx.lineTo(ix + 15, iy + 5); ctx.lineTo(ix + 5, iy - 5); ctx.closePath(); ctx.fillStyle = it[0]; ctx.fill(); }
       else { ctx.fillStyle = it[0]; roundRect(ctx, ix, iy - 15, 30, 20, 4); ctx.fill(); ctx.strokeStyle = '#888'; ctx.stroke(); }
       ctx.fillStyle = '#333';
       for (var fz = 14; fz > 10; fz--) { ctx.font = '400 ' + fz + 'px ' + font; if (ctx.measureText(it[1]).width <= colW - 46) break; }

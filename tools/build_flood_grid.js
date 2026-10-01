@@ -154,17 +154,18 @@ Heap.prototype.pop = function () {
     for (let i = 0; i < tambons.length; i++) if (TM.pointInFeature(lon, lat, tambons[i])) { ti = i; break; }
     if (ti !== 255) inside++;
     const river = chan[k] >= 0;
-    const tv = river ? 65535 : enc(thr[k]), ev = enc(e[k]);
+    // ลำน้ำ: เก็บระดับตลิ่งเฉพาะที่ (ค่าเริ่ม priority flood) ให้หน้าเว็บคำนวณใหม่ได้เมื่อมีจุดน้ำเข้า/ข้อมูลหน้างาน
+    const tv = enc(thr[k]), ev = enc(e[k]);
     A.data[j] = tv >> 8; A.data[j + 1] = tv & 255; A.data[j + 2] = ti; A.data[j + 3] = 255;
     B.data[j] = ev >> 8; B.data[j + 1] = ev & 255; B.data[j + 2] = river ? 254 : lu[k]; B.data[j + 3] = 255;
   }
   const pa = PNG.sync.write(A), pb = PNG.sync.write(B);
   const meta = { z: Z, x0: g.x0 + cx0, y0: g.y0 + cy0, w: W, h: H, offset: 20, scale: 100, none: 65535, riverCode: 254,
-    tambons: order, bank, slope, ch0: +ch0.toFixed(3), params: { bareEarth: P.bareEarth, bankDemWeight: P.bankDemWeight, maxSpreadKm: P.maxSpreadKm, waterBodyDepthM: P.waterBodyDepthM },
+    tambons: order, bank, slope, version: 2, ch0: +ch0.toFixed(3), params: { bareEarth: P.bareEarth, bankDemWeight: P.bankDemWeight, maxSpreadKm: P.maxSpreadKm, waterBodyDepthM: P.waterBodyDepthM },
     ratingCurve: PS.ratingCurve, bankfullQ: PS.bankfullQ };
   fs.writeFileSync(path.join(ROOT, 'data/banpong-flood.js'),
     '// ตารางคาดการณ์น้ำท่วม อ.บ้านโป่ง (สร้างด้วย tools/build_flood_grid.js) — DEM: AWS Terrain Tiles, การใช้ที่ดิน: ESA WorldCover 2021\n' +
-    '// a: R,G = thr (ระดับน้ำ K.55A ที่น้ำมาถึง, (ค่า/100) − offset ม.), B = ลำดับตำบล (255 = นอกอำเภอ)\n' +
+    '// a: R,G = thr (ระดับน้ำ K.55A ที่น้ำมาถึง, (ค่า/100) − offset ม.; เซลล์ลำน้ำ = ระดับตลิ่งเฉพาะที่), B = ลำดับตำบล (255 = นอกอำเภอ)\n' +
     '// b: R,G = e (พื้นดินเทียบระดับ K.55A), B = การใช้ที่ดิน (254 = ลำน้ำ)\n' +
     'window.BANPONG_FLOOD = ' + JSON.stringify(Object.assign(meta, {
       a: 'data:image/png;base64,' + pa.toString('base64'), b: 'data:image/png;base64,' + pb.toString('base64') })) + ';\n');

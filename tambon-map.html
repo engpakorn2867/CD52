@@ -34,7 +34,12 @@
     .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
     canvas { width: 100%; height: auto; display: block; border-radius: 6px; touch-action: manipulation; }
     canvas.assign, canvas.erase, canvas.team { cursor: pointer; }
-    canvas.draw { cursor: crosshair; }
+    canvas.draw, canvas.drain, canvas.pond, canvas.obs { cursor: crosshair; }
+    .pts td input[type=number] { width: 86px; }
+    .pts td input[type=text] { width: 100%; min-width: 120px; }
+    .pts td select { min-width: 120px; }
+    .diff-ok { color: #2e7d32; } .diff-bad { color: var(--bad); }
+    input.need { outline: 2px solid var(--bad); }
     .msg { font-size: 13px; color: var(--muted); padding: 0 16px; min-height: 18px; }
     a { color: var(--accent); }
     table.ag { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -151,6 +156,18 @@
         <label>ทุ่งหญ้า/อื่นๆ (บาท/ไร่)<input type="number" id="fvOther" step="100" min="0"></label>
       </div>
     </details>
+    <h3 style="margin:14px 4px 4px;font-size:15px">จุดน้ำเข้าพื้นที่นอกจากล้นตลิ่ง — ท่อระบายน้ำ / ประตูระบายน้ำ / หนองบึง</h3>
+    <p class="hint">ใช้เครื่องมือ <b>ปักท่อระบายน้ำ</b> หรือ <b>ปักหนอง/บึง</b> ใต้แผนที่ แล้วคลิกตำแหน่งปากท่อ/บึง · เมื่อระดับน้ำแม่น้ำสูงกว่าระดับท้องท่อ น้ำจะไหลย้อนท่อ
+      ผุดขึ้นที่บ่อพัก/ที่ต่ำทุกจุดในรัศมีพื้นที่รับน้ำของท่อ (สีม่วงบนแผนที่) · สถานะ “มีบานกันน้ำย้อน/ปิดแล้ว” หรือ “ปิด + เครื่องสูบ” จะไม่นับเป็นจุดน้ำเข้า</p>
+    <div class="wrap-table"><table class="ag pts" id="srcTable"></table></div>
+    <h3 style="margin:14px 4px 4px;font-size:15px">จุดน้ำท่วมจริงจากหน้างาน (ใช้ปรับแบบจำลอง)</h3>
+    <p class="hint">ใช้เครื่องมือ <b>ปักจุดน้ำท่วมจริง</b> คลิกตำแหน่งที่วัด แล้วกรอกความลึกที่วัดได้ (0 = แห้ง) และระดับน้ำ K.55A ขณะวัด ·
+      ระบบปรับระดับพื้นดินรอบจุดให้ตรงกับที่วัด (ข้อมูลความสูงดาวเทียมคลาดเคลื่อน ±0.5–1 ม.) แล้วคำนวณพื้นที่ท่วมใหม่</p>
+    <div class="fc-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+      <label>รัศมีผลของจุดสำรวจ (ม.)<input type="number" id="obsRadius" step="100" min="200" max="5000"></label>
+    </div>
+    <div class="wrap-table"><table class="ag pts" id="obsTable"></table></div>
+    <div class="hint" id="scnStatus" role="status"></div>
     <p class="hint">วิธีคำนวณ: ตลิ่ง 9.00 ม.รทก. (Q ตลิ่งเต็ม 1,730 ลบ.ม./วินาที) · พื้นที่จริงริมแม่น้ำจากแบบจำลองความสูง (DEM ~37 ม., ปรับเขตอาคาร/ต้นไม้เป็นระดับพื้นดิน) และการใช้ที่ดิน ESA WorldCover ·
       น้ำล้นเข้าพื้นที่จากตลิ่งช่วงที่ไหลผ่าน อ.บ้านโป่ง แล้วไหลไปตามที่ต่ำที่เชื่อมต่อกัน (ผิวน้ำลาดตามลำน้ำ 0.15 ม./กม.) ·
       โหมด “จำกัดตามปริมาณน้ำ” เติมน้ำปริมาตร (Q − 1,730) × เวลา ลงที่ลุ่มที่น้ำไปถึงจากที่ต่ำสุดขึ้นมา · ความเสียหายตามโค้งความลึก–ความเสียหาย JRC (เอเชีย) ·
@@ -216,6 +233,7 @@
   <script src="data/banpong-basemap.js"></script>
   <script src="data/banpong-flood.js"></script>
   <script src="js/tambon-map.js"></script>
+  <script src="js/flood.js"></script>
   <script src="js/flood-forecast.js"></script>
   <script>
   (function () {
@@ -242,8 +260,10 @@
       if (!Array.isArray(store.agencies)) store.agencies = [];
       if (!Array.isArray(store.teams)) store.teams = [];
       if (!Array.isArray(store.zones)) store.zones = [];
-      var F0 = { H: 10.67, Q: null, link: true, mode: 'volume', hours: 24, risk: 0.5, show: true, values: null };
+      var F0 = { H: 10.67, Q: null, link: true, mode: 'volume', hours: 24, risk: 0.5, show: true, values: null, sources: [], obs: [], obsRadius: 1000 };
       store.forecast = Object.assign({}, F0, store.forecast || {});
+      if (!Array.isArray(store.forecast.sources)) store.forecast.sources = [];
+      if (!Array.isArray(store.forecast.obs)) store.forecast.obs = [];
       if (!(store.forecast.H > 0)) store.forecast.H = F0.H;
       if (!store.assign || typeof store.assign !== 'object') store.assign = {};
       if (!store.agencies.length) addAgency();
@@ -462,7 +482,8 @@
         var tools = document.createElement('div'); tools.className = 'tools';
         tools.appendChild(document.createTextNode('เครื่องมือ:'));
         var btns = {};
-        [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ'], ['team', 'วางจุดชุดปฏิบัติการ']].forEach(function (t) {
+        [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ'], ['team', 'วางจุดชุดปฏิบัติการ'],
+          ['drain', 'ปักท่อระบายน้ำ'], ['pond', 'ปักหนอง/บึง'], ['obs', 'ปักจุดน้ำท่วมจริง']].forEach(function (t) {
           var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1]; b.dataset.tool = t[0];
           b.onclick = function () { setTool(v, t[0]); };
           tools.appendChild(b); btns[t[0]] = b;
@@ -534,6 +555,22 @@
         if (inT && t.tambons.indexOf(inT.properties.th) < 0) t.tambons.push(inT.properties.th);
         msg('วางจุดตั้ง “' + (t.name || 'ชุดปฏิบัติการ') + '”' + (inT ? ' ใน ต.' + inT.properties.th : ''));
         renderTeams(); changed();
+      } else if (v.tool === 'drain' || v.tool === 'pond') {
+        var inS = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
+        var src = { id: uid('s'), kind: v.tool, lon: ll[0], lat: ll[1], invert: null, radius: v.tool === 'drain' ? 600 : 300, status: 'open',
+          name: (v.tool === 'drain' ? 'ท่อระบายน้ำ ' : 'หนอง/บึง ') + (store.forecast.sources.filter(function (x) { return x.kind === v.tool; }).length + 1) + (inS ? ' ต.' + inS.properties.th : '') };
+        store.forecast.sources.push(src);
+        msg('เพิ่ม “' + src.name + '” แล้ว — ใส่ระดับท้องท่อ (ถ้าทราบ) และรัศมีพื้นที่รับน้ำในการ์ดคาดการณ์ด้านบน');
+        renderPoints(); scnChanged();
+      } else if (v.tool === 'obs') {
+        var inO = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
+        var ob = { id: uid('o'), lon: ll[0], lat: ll[1], depth: null, H: store.forecast.H, time: new Date().toISOString().slice(0, 16),
+          name: 'จุดสำรวจ ' + (store.forecast.obs.length + 1) + (inO ? ' ต.' + inO.properties.th : '') };
+        store.forecast.obs.push(ob);
+        renderPoints(); save(); drawAll();
+        var inp = document.querySelector('#obsTable [data-id="' + ob.id + '"] [data-field=depth]');
+        if (inp) { inp.scrollIntoView({ block: 'center' }); inp.focus(); }
+        msg('เพิ่มจุดสำรวจแล้ว — กรอกความลึกน้ำที่วัดได้');
       }
     }
     function finishDraft(v, label) {
@@ -608,7 +645,7 @@
         d.appendChild(s1); d.appendChild(b); d.appendChild(s2); st.appendChild(d);
       });
       var tb = $('fcTable'); tb.innerHTML = '';
-      var head = ['ตำบล', 'พื้นที่ท่วม (ไร่)', 'ชุมชน', 'นา/ไร่', 'สวน', 'อื่นๆ', 'ลึกเฉลี่ย (ม.)', 'ลึกสุด (ม.)', 'สัดส่วนความลึก', 'ความเสียหาย (บาท)', 'เสี่ยงเพิ่ม (ไร่)', 'เริ่มท่วมที่ (ม.)'];
+      var head = ['ตำบล', 'พื้นที่ท่วม (ไร่)', 'จากท่อ/บึง', 'ชุมชน', 'นา/ไร่', 'สวน', 'อื่นๆ', 'ลึกเฉลี่ย (ม.)', 'ลึกสุด (ม.)', 'สัดส่วนความลึก', 'ความเสียหาย (บาท)', 'เสี่ยงเพิ่ม (ไร่)', 'เริ่มท่วมที่ (ม.)'];
       var tr = document.createElement('tr');
       head.forEach(function (h) { var th = document.createElement('th'); th.textContent = h; tr.appendChild(th); });
       tb.appendChild(tr);
@@ -620,7 +657,7 @@
         function td(v, zero) { var c = document.createElement('td'); c.textContent = v; if (zero) c.className = 'zero'; tr.appendChild(c); return c; }
         td(o.total ? 'รวมทั้งอำเภอ' : 'ต.' + x.th);
         var z = x.rai < 1;
-        td(num(x.rai), z); td(num(x.groups.built), z); td(num(x.groups.crop), z); td(num(x.groups.tree), z); td(num(x.groups.other), z);
+        td(num(x.rai), z); td(num(x.drainRai), !x.drainRai); td(num(x.groups.built), z); td(num(x.groups.crop), z); td(num(x.groups.tree), z); td(num(x.groups.other), z);
         td(z ? '—' : x.meanD.toFixed(2), z); td(z ? '—' : x.maxD.toFixed(2), z);
         var bc = td(''), bars = document.createElement('span'); bars.className = 'bars';
         if (!z) FF.CLASSES.forEach(function (c, i) {
@@ -636,7 +673,7 @@
     function fcChanged(redraw) {
       save();
       clearTimeout(fcTimer);
-      fcTimer = setTimeout(function () { fcCompute(); if (redraw !== false) drawAll(); }, 120);
+      fcTimer = setTimeout(function () { fcCompute(); renderPoints(true); if (redraw !== false) drawAll(); }, 120);
     }
     function setH(h) {
       var f = store.forecast; f.H = Math.max(8, Math.min(14, Math.round(h * 100) / 100));
@@ -667,10 +704,10 @@
     });
     $('fcCsv').onclick = function () {
       if (!fcRes) return;
-      var f = store.forecast, lines = [['ตำบล', 'พื้นที่ท่วม (ไร่)', 'ชุมชน (ไร่)', 'นา/ไร่ (ไร่)', 'สวน (ไร่)', 'อื่นๆ (ไร่)', 'ลึกเฉลี่ย (ม.)', 'ลึกสุด (ม.)',
+      var f = store.forecast, lines = [['ตำบล', 'พื้นที่ท่วม (ไร่)', 'จากท่อ/บึง (ไร่)', 'ชุมชน (ไร่)', 'นา/ไร่ (ไร่)', 'สวน (ไร่)', 'อื่นๆ (ไร่)', 'ลึกเฉลี่ย (ม.)', 'ลึกสุด (ม.)',
         'ลึก<0.5 (ไร่)', 'ลึก0.5-1 (ไร่)', 'ลึก1-2 (ไร่)', 'ลึก>2 (ไร่)', 'ความเสียหาย (บาท)', 'เสี่ยงเพิ่ม (ไร่)', 'เริ่มท่วมที่ (ม.รทก.)']];
       fcRes.tambons.concat([fcRes.total]).forEach(function (x, i) {
-        lines.push([x.th === 'รวม' ? 'รวมทั้งอำเภอ' : 'ต.' + x.th, x.rai.toFixed(0), x.groups.built.toFixed(0), x.groups.crop.toFixed(0), x.groups.tree.toFixed(0), x.groups.other.toFixed(0),
+        lines.push([x.th === 'รวม' ? 'รวมทั้งอำเภอ' : 'ต.' + x.th, x.rai.toFixed(0), x.drainRai.toFixed(0), x.groups.built.toFixed(0), x.groups.crop.toFixed(0), x.groups.tree.toFixed(0), x.groups.other.toFixed(0),
           x.meanD.toFixed(2), x.maxD.toFixed(2)].concat(x.classes.map(function (c) { return c.toFixed(0); }), [x.damage.toFixed(0), x.riskRai.toFixed(0),
           i < fcRes.onset.length && fcRes.onset[i] != null ? fcRes.onset[i].toFixed(2) : '']));
       });
@@ -682,9 +719,130 @@
         document.body.appendChild(a); a.click(); a.remove();
       });
     };
+    // ---------- จุดน้ำเข้า (ท่อ/บึง) และจุดสำรวจหน้างาน ----------
+    var FM = window.FloodModel, scnTimer = 0;
+    var STATUS = [['open', 'เปิด / ไม่มีบานกันน้ำย้อน'], ['gate', 'มีบานกันน้ำย้อน / ปิดแล้ว'], ['pump', 'ปิด + เครื่องสูบน้ำ']];
+    // ระดับ ม.รทก. ที่จุดหนึ่ง → ระดับเทียบสถานี K.55A (ผิวน้ำลาดตามลำน้ำ)
+    function toEq(level, lon, lat) {
+      if (!FM || !FMETA) return level;
+      return level + FMETA.slope * (FM.projectToLine(river, lat, lon).chainage - FMETA.ch0);
+    }
+    function fromEq(v, lon, lat) { return v - (toEq(0, lon, lat)); }
+    function srcLevelEq(s) {
+      // ไม่ทราบระดับท้องท่อ: ท่อ = พื้นดินที่ปากท่อ − 1.5 ม. · บึง = ระดับพื้น/ผิวน้ำในบึงจากข้อมูลความสูง
+      if (s.invert != null && isFinite(s.invert)) return toEq(s.invert, s.lon, s.lat);
+      var g = fcGrid ? fcGrid.groundAt(s.lon, s.lat) : NaN;
+      return s.kind === 'drain' ? g - 1.5 : g;
+    }
+    function applyScenario() {
+      if (!fcGrid) return;
+      var f = store.forecast;
+      fcGrid.setScenario({
+        sources: f.sources.filter(function (s) { return s.status === 'open'; }).map(function (s) {
+          return { lon: s.lon, lat: s.lat, level: srcLevelEq(s), radiusM: s.radius || 0 };
+        }),
+        obs: f.obs.filter(function (o) { return o.depth != null && o.depth !== ''; }).map(function (o) {
+          return { lon: o.lon, lat: o.lat, depth: +o.depth, H: +o.H };
+        }),
+        obsRadiusM: f.obsRadius
+      });
+    }
+    function scnChanged() {
+      save();
+      $('scnStatus').textContent = 'กำลังคำนวณพื้นที่ใหม่…';
+      clearTimeout(scnTimer);
+      scnTimer = setTimeout(function () { applyScenario(); fcCompute(); renderPoints(true); drawAll(); }, 250);
+    }
+    function ptCell(tr, el) { var td = document.createElement('td'); td.appendChild(el); tr.appendChild(td); return el; }
+    function ptInput(obj, key, type, ph, step, onChange) {
+      var i = document.createElement('input'); i.type = type; i.placeholder = ph || ''; i.dataset.field = key;
+      if (step) i.step = step;
+      i.value = obj[key] == null ? '' : obj[key];
+      i.oninput = function () {
+        obj[key] = type === 'number' ? (i.value === '' ? null : parseFloat(i.value)) : i.value;
+        (onChange || scnChanged)();
+      };
+      i.setAttribute('aria-label', ph || key);
+      return i;
+    }
+    function ptDelete(list, item) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'danger'; b.textContent = 'ลบ';
+      twoStepDelete(b, function () { var a = store.forecast[list]; a.splice(a.indexOf(item), 1); renderPoints(); scnChanged(); });
+      return b;
+    }
+    function renderPoints(resultsOnly) {
+      var f = store.forecast, st = $('srcTable'), ot = $('obsTable');
+      if (!resultsOnly) {
+        st.textContent = '';
+        var h = document.createElement('tr');
+        ['ชนิด', 'ชื่อ / ตำแหน่ง', 'ระดับท้องท่อ (ม.รทก.)', 'รัศมีรับน้ำ (ม.)', 'สถานะ', 'ผล', ''].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
+        st.appendChild(h);
+        if (!f.sources.length) { var e0 = document.createElement('tr'), td0 = document.createElement('td'); td0.colSpan = 7; td0.className = 'hint'; td0.textContent = 'ยังไม่มีจุด — ใช้เครื่องมือ “ปักท่อระบายน้ำ” หรือ “ปักหนอง/บึง” ใต้แผนที่'; e0.appendChild(td0); st.appendChild(e0); }
+        f.sources.forEach(function (s) {
+          var tr = document.createElement('tr'); tr.dataset.id = s.id;
+          var k = document.createElement('span'); k.textContent = s.kind === 'drain' ? '▼ ท่อ' : '● บึง'; k.style.color = s.kind === 'drain' ? '#7b1fa2' : '#00838f'; k.style.fontWeight = 700;
+          ptCell(tr, k);
+          ptCell(tr, ptInput(s, 'name', 'text', 'ชื่อ เช่น ท่อหน้าตลาด', null, function () { save(); clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 300); }));
+          ptCell(tr, ptInput(s, 'invert', 'number', 'ไม่ทราบ', '0.05'));
+          ptCell(tr, ptInput(s, 'radius', 'number', '600', '50'));
+          var sel = document.createElement('select'); sel.setAttribute('aria-label', 'สถานะ');
+          STATUS.forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+          sel.value = s.status; sel.onchange = function () { s.status = sel.value; scnChanged(); };
+          ptCell(tr, sel);
+          var res = document.createElement('span'); res.className = 'src-res'; ptCell(tr, res);
+          ptCell(tr, ptDelete('sources', s));
+          st.appendChild(tr);
+        });
+        ot.textContent = '';
+        var h2 = document.createElement('tr');
+        ['ชื่อ / สถานที่', 'ความลึกที่วัด (ม.)', 'ระดับน้ำ K.55A ขณะวัด (ม.)', 'วันเวลา', 'แบบจำลอง (ม.)', ''].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h2.appendChild(th); });
+        ot.appendChild(h2);
+        if (!f.obs.length) { var e1 = document.createElement('tr'), td1 = document.createElement('td'); td1.colSpan = 6; td1.className = 'hint'; td1.textContent = 'ยังไม่มีจุดสำรวจ — ใช้เครื่องมือ “ปักจุดน้ำท่วมจริง” ใต้แผนที่'; e1.appendChild(td1); ot.appendChild(e1); }
+        f.obs.forEach(function (o) {
+          var tr = document.createElement('tr'); tr.dataset.id = o.id;
+          ptCell(tr, ptInput(o, 'name', 'text', 'เช่น หน้าตลาดบ้านโป่ง', null, function () { save(); clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 300); }));
+          var d = ptCell(tr, ptInput(o, 'depth', 'number', 'เช่น 0.5', '0.05', function () { d.classList.toggle('need', o.depth == null); scnChanged(); }));
+          d.min = 0; d.classList.toggle('need', o.depth == null);
+          ptCell(tr, ptInput(o, 'H', 'number', '10.67', '0.01'));
+          ptCell(tr, ptInput(o, 'time', 'datetime-local', '', null, function () { save(); }));
+          var res = document.createElement('span'); res.className = 'obs-res'; ptCell(tr, res);
+          ptCell(tr, ptDelete('obs', o));
+          ot.appendChild(tr);
+        });
+      }
+      // ผลรายจุด
+      if (!fcGrid) return;
+      f.sources.forEach(function (s) {
+        var el = document.querySelector('#srcTable [data-id="' + s.id + '"] .src-res'); if (!el) return;
+        var lv = fromEq(srcLevelEq(s), s.lon, s.lat), on = s.status === 'open';
+        el.textContent = !isFinite(lv) ? 'อยู่นอกพื้นที่คำนวณ' :
+          (s.invert == null ? 'ท้องท่อประมาณ ' : 'ท้องท่อ ') + lv.toFixed(2) + ' ม. · ' +
+          (!on ? 'ไม่นับ (ปิด)' : f.H > toEq(lv, s.lon, s.lat) ? 'น้ำไหลย้อนเข้า (สูงกว่า ' + (f.H - toEq(lv, s.lon, s.lat)).toFixed(2) + ' ม.)' : 'ยังไม่ไหลย้อน');
+      });
+      f.obs.forEach(function (o) {
+        var el = document.querySelector('#obsTable [data-id="' + o.id + '"] .obs-res'); if (!el) return;
+        if (o.depth == null) { el.textContent = '—'; return; }
+        var md = fcGrid.depthAt(o.lon, o.lat, +o.H), diff = md - o.depth;
+        el.textContent = md.toFixed(2) + ' (ต่าง ' + (diff >= 0 ? '+' : '') + diff.toFixed(2) + ')';
+        el.className = 'obs-res ' + (Math.abs(diff) <= 0.2 ? 'diff-ok' : 'diff-bad');
+      });
+      var sc = fcGrid.scenario || { sources: 0, obs: 0 }, r = fcRes;
+      $('scnStatus').textContent = (sc.sources || sc.obs)
+        ? 'ใช้จุดน้ำเข้า ' + sc.sources + ' จุด · จุดสำรวจ ' + sc.obs + ' จุด' + (r ? ' · น้ำจากท่อ/บึงท่วม ' + num(r.total.drainRai) + ' ไร่ที่ระดับ ' + f.H.toFixed(2) + ' ม.' : '')
+        : '';
+    }
+    $('obsRadius').oninput = function () { var v = parseFloat(this.value); if (v >= 100) { store.forecast.obsRadius = v; scnChanged(); } };
+    function pointsCfg() {
+      var f = store.forecast, out = [];
+      f.sources.forEach(function (s) { out.push({ kind: s.kind, lon: s.lon, lat: s.lat, label: s.name, off: s.status !== 'open' }); });
+      f.obs.forEach(function (o) { if (o.depth != null) out.push({ kind: 'obs', lon: o.lon, lat: o.lat, label: (o.name ? o.name + ' ' : '') + (+o.depth > 0 ? 'ลึก ' + (+o.depth).toFixed(2) + ' ม.' : 'แห้ง') }); });
+      return out;
+    }
+
     function floodCfg() {
       if (!fcRes || !store.forecast.show) return null;
-      return { image: fcImage, grid: FMETA, res: fcRes, H: store.forecast.H, Q: store.forecast.Q, riskM: store.forecast.risk, note: fcNote() };
+      return { image: fcImage, grid: FMETA, res: fcRes, H: store.forecast.H, Q: store.forecast.Q, riskM: store.forecast.risk, note: fcNote(),
+        drain: fcRes.total.drainRai >= 1 };
     }
 
     // ---------------- วาด ----------------
@@ -714,7 +872,7 @@
           title: viewTitle(v), subtitle: v.fixed ? 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' : 'แนวแม่น้ำแม่กลอง หน่วยงานรับผิดชอบ และชุดปฏิบัติการ',
           tiles: [], note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
           basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.fixed ? store.allMode : (v.mode || 'plain'),
-          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg() };
+          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg(), floodPoints: pointsCfg() };
         v.proj = TM.render(cfg);
         var list = Object.keys(cfg._used || {}).map(function (id) {
           var a = agencyById(id), u = cfg._used[id];
@@ -807,7 +965,8 @@
       renderRows(); renderTeams(); buildCards();
       fcReady.then(function (g) {
         if (!g) { $('fcStatus').textContent = 'โหลดข้อมูลความสูงพื้นที่ไม่สำเร็จ'; return; }
-        fcInputs(); fcCompute();
+        fcInputs(); $('obsRadius').value = store.forecast.obsRadius;
+        applyScenario(); fcCompute(); renderPoints();
       }).then(drawAll);
     }
     load(); renderAll();

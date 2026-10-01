@@ -49,3 +49,33 @@ test('ระดับเริ่มท่วมรายตำบลอยู�
   assert.ok(on.length >= 12);
   for (const v of on) assert.ok(v >= 9 && v < 14);
 });
+
+test('ท่อระบายน้ำ: น้ำย้อนท่อเฉพาะในรัศมี และเมื่อระดับน้ำสูงกว่าท้องท่อ', () => {
+  const drain = { lon: 99.8835, lat: 13.8135, radiusM: 600 };
+  const k0 = g.cellOf(drain.lon, drain.lat);
+  g.setScenario({ sources: [Object.assign({ level: 11.5 }, drain)] });
+  assert.strictEqual(g.compute(10.67).total.drainRai, 0, 'ท้องท่อสูงกว่าระดับน้ำ ต้องไม่ย้อน');
+  g.setScenario({ sources: [Object.assign({ level: 9 }, drain)] });
+  const r = g.compute(10.67, { volumeM3: 1e6 });
+  assert.ok(r.total.drainRai > 10);
+  // เซลล์น้ำจากท่อทุกเซลล์อยู่ในรัศมี
+  const w = meta.w, x0 = k0 % w, y0 = (k0 - x0) / w, rc = Math.round(600 / g.mpp);
+  for (let k = 0; k < r.depth.length; k++) if (r.depth[k] > 0 && g.origin[k] === 1) {
+    const x = k % w, y = (k - x) / w;
+    assert.ok((x - x0) ** 2 + (y - y0) ** 2 <= rc * rc);
+  }
+  g.setScenario(null);
+  assert.strictEqual(g.compute(10.67).total.drainRai, 0);
+});
+
+test('จุดสำรวจหน้างาน: แบบจำลองให้ความลึกตรงกับที่วัด และไม่กระทบพื้นที่ไกลออกไป', () => {
+  const base = g.compute(11).tambons.map(t => t.rai);
+  const ob = { lon: 99.877, lat: 13.816, depth: 0.5, H: 10.67 };
+  g.setScenario({ obs: [ob], obsRadiusM: 1000 });
+  assert.ok(Math.abs(g.depthAt(ob.lon, ob.lat, ob.H) - 0.5) < 0.05);
+  const r = g.compute(11);
+  assert.ok(r.tambons[0].rai > base[0], 'ต.บ้านโป่ง ต้องท่วมมากขึ้น');
+  // ตำบลฝั่งตะวันตกไกลออกไปไม่เปลี่ยน
+  assert.strictEqual(r.tambons[12].rai, base[12]);
+  g.setScenario(null);
+});
