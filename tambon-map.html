@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>แผนที่ตำบลริมแม่กลอง บ้านโป่ง</title>
+  <style>
+    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font-family: "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif; }
+    header { padding: 14px 16px 4px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
+    button, select { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--text); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .card { margin: 8px 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    .card h2 { font-size: 16px; margin: 2px 4px 8px; }
+    canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
+    .msg { font-size: 13px; color: var(--muted); padding: 0 16px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>แผนที่ตำบล อ.บ้านโป่ง ตามความสัมพันธ์กับแม่น้ำแม่กลอง</h1>
+    <p>สีฟ้า = แม่น้ำแม่กลอง · สีแดง = ตำบลที่ติด/แม่น้ำไหลผ่าน · สีเหลือง = ตำบลที่ติดกับตำบลริมแม่น้ำ · กด “บันทึกเป็นรูป” เพื่อดาวน์โหลด PNG</p>
+  </header>
+  <div class="bar">
+    <label>พื้นหลัง
+      <select id="bg">
+        <option value="none">แบบเรียบ (เหมือนแผนที่เขต)</option>
+        <option value="sat">ภาพดาวเทียม (Esri)</option>
+      </select>
+    </label>
+    <a href="index.html">← กลับไปแผนที่คาดการณ์น้ำท่วม</a>
+  </div>
+  <div id="msg" class="msg"></div>
+
+  <div class="card">
+    <h2>1. ภาพรวม อ.บ้านโป่ง <button type="button" class="primary" data-save="cvAll">บันทึกเป็นรูป (PNG)</button></h2>
+    <canvas id="cvAll" width="1800" height="1200" aria-label="แผนที่ตำบลทั้งอำเภอบ้านโป่ง"></canvas>
+  </div>
+  <div class="card">
+    <h2>2. เจาะจง ต.คุ้งพยอม และ ต.บ้านม่วง <button type="button" class="primary" data-save="cvFocus">บันทึกเป็นรูป (PNG)</button></h2>
+    <canvas id="cvFocus" width="1800" height="1200" aria-label="แผนที่ตำบลคุ้งพยอมและบ้านม่วง"></canvas>
+  </div>
+
+  <script src="data/banpong-tambons.js"></script>
+  <script src="data/maeklong-river.js"></script>
+  <script src="data/landcover.js"></script>
+  <script src="js/tambon-map.js"></script>
+  <script>
+  (function () {
+    var TM = window.TambonMap, LC = window.LANDCOVER;
+    var features = window.BANPONG_TAMBONS.features, river = window.MAEKLONG_RIVER;
+    TM.classify(features, river);
+    var NOTE = 'ที่มา: ขอบเขตตำบล OpenGISData-Thailand (แบบย่อ ไม่ใช่แนวเขตทางกฎหมาย) · แม่น้ำ: ESA WorldCover 2021 (CC BY 4.0) + แนวร่องน้ำจาก DEM · จัดทำเพื่อประกอบการเฝ้าระวังอุทกภัย';
+    var VIEWS = [
+      { id: 'cvAll', focus: null, title: 'ตำบลที่ได้รับผลกระทบจากแม่น้ำแม่กลอง อ.บ้านโป่ง จ.ราชบุรี',
+        subtitle: 'แบ่งตามที่ตั้งเทียบแม่น้ำแม่กลอง: ติด/แม่น้ำไหลผ่าน (แดง) · ติดกับตำบลริมน้ำ (เหลือง) · อื่นๆ (เทา)' },
+      { id: 'cvFocus', focus: ['คุ้งพยอม', 'บ้านม่วง'], title: 'ต.คุ้งพยอม และ ต.บ้านม่วง อ.บ้านโป่ง จ.ราชบุรี',
+        subtitle: 'แนวแม่น้ำแม่กลองที่ไหลผ่านและตำบลโดยรอบ' }
+    ];
+
+    // แปลงภาพการใช้ที่ดิน (ฝังเป็น PNG) เป็นรหัสชั้น
+    function loadLandcover() {
+      return new Promise(function (res) {
+        if (!LC) return res(null);
+        var img = new Image();
+        img.onload = function () {
+          var c = document.createElement('canvas'); c.width = LC.w; c.height = LC.h;
+          var x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+          var px = x.getImageData(0, 0, LC.w, LC.h).data, cls = new Uint8Array(LC.w * LC.h);
+          for (var i = 0; i < cls.length; i++) cls[i] = Math.round(px[i * 4] / LC.scale);
+          res({ z: LC.z, x0: LC.x0, y0: LC.y0, w: LC.w, h: LC.h, cls: cls });
+        };
+        img.onerror = function () { res(null); };
+        img.src = LC.png;
+      });
+    }
+
+    // ภาพดาวเทียมพื้นหลัง (ต้องอนุญาต CORS จึงบันทึกเป็นรูปได้)
+    function loadTiles(view, canvas) {
+      var bp = features.filter(function (f) { return f.properties.role === 'banpong' && (!view.focus || view.focus.indexOf(f.properties.th) >= 0); });
+      var bb = TM.bboxOf(bp), pad = view.focus ? 0.6 : 0.15;
+      var w = bb[2] - bb[0], h = bb[3] - bb[1];
+      var lon0 = bb[0] - w * pad, lon1 = bb[2] + w * pad, lat0 = bb[1] - h * pad, lat1 = bb[3] + h * pad;
+      var z = view.focus ? 14 : 12, n = Math.pow(2, z), jobs = [];
+      var tx0 = Math.floor(TM.mx(lon0) * n), tx1 = Math.floor(TM.mx(lon1) * n), ty0 = Math.floor(TM.my(lat1) * n), ty1 = Math.floor(TM.my(lat0) * n);
+      for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++) {
+        (function (x, y) {
+          jobs.push(new Promise(function (res) {
+            var img = new Image(); img.crossOrigin = 'anonymous';
+            img.onload = function () { res({ img: img, x: x, y: y, z: z }); };
+            img.onerror = function () { res(null); };
+            img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
+          }));
+        })(x, y);
+      }
+      return Promise.all(jobs).then(function (t) { return t.filter(Boolean); });
+    }
+
+    var lcPromise = loadLandcover();
+    function draw() {
+      var useSat = document.getElementById('bg').value === 'sat';
+      lcPromise.then(function (lc) {
+        VIEWS.forEach(function (v) {
+          var cv = document.getElementById(v.id);
+          var tilesP = useSat ? loadTiles(v, cv) : Promise.resolve([]);
+          tilesP.then(function (tiles) {
+            TM.render({ canvas: cv, features: features, river: river, landcover: lc, focus: v.focus,
+              title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE });
+            if (useSat && !tiles.length) document.getElementById('msg').textContent = 'โหลดภาพดาวเทียมไม่ได้ — แสดงแบบเรียบแทน';
+          });
+        });
+      });
+    }
+
+    document.getElementById('bg').onchange = function () { document.getElementById('msg').textContent = ''; draw(); };
+    document.querySelectorAll('[data-save]').forEach(function (b) {
+      b.onclick = function () {
+        var cv = document.getElementById(b.dataset.save);
+        try {
+          cv.toBlob(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (b.dataset.save === 'cvAll' ? 'banpong-tambon-maeklong' : 'khung-phayom-ban-muang') + '.png';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+          }, 'image/png');
+        } catch (e) {
+          document.getElementById('msg').textContent = 'บันทึกภาพพร้อมพื้นหลังดาวเทียมไม่ได้ (ผู้ให้บริการไม่อนุญาต) — เลือกพื้นหลังแบบเรียบแล้วบันทึกอีกครั้ง';
+        }
+      };
+    });
+    window.tambonMap = { draw: draw, features: features };
+    draw();
+  })();
+  </script>
+</body>
+</html>
