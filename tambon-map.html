@@ -202,6 +202,10 @@
       <div class="hint">ตำแหน่งหมู่บ้าน: เลือกหมู่ แล้วใช้เครื่องมือ <b>ปักตำแหน่งหมู่บ้าน</b> ใต้แผนที่ คลิกกลางหมู่บ้าน (ระบบเลื่อนไปหมู่ถัดไปให้อัตโนมัติ) —
         ใช้หาว่าหมู่บ้านใดอยู่ในพื้นที่น้ำท่วมตามการคาดการณ์ และแสดงจำนวนกลุ่มเปราะบางบนแผนที่</div>
       <div class="moo-list" id="mooList"></div>
+      <h3 style="margin:14px 4px 4px;font-size:15px">หมู่บ้านริมน้ำ — ใช้จัดลำดับให้ช่วยหมู่ที่ใกล้แม่น้ำก่อน</h3>
+      <p class="hint">ลำดับช่วย: หมู่บ้านที่น้ำท่วม (ตามคาดการณ์) → <b>ริมน้ำ</b> → ใกล้น้ำ 1–2 กม. → ไม่ทราบ → ห่างน้ำ แล้วจึงตามระดับความเร่งด่วน ·
+        ค่าเริ่มต้น<b>ประมาณจากที่อยู่สถานที่ในแผนที่ (ยังไม่ยืนยัน)</b> — แก้ให้ตรงกับข้อมูลจาก อบต./ผู้ใหญ่บ้าน แล้วติ๊ก “ยืนยันแล้ว”</p>
+      <div class="wrap-table"><table class="ag pts" id="riverTable"></table></div>
       <div class="row" style="margin:8px 4px">
         <label>หน้า <select id="vulnPage"></select></label>
         <button type="button" class="primary" id="vulnSavePage">บันทึกรูปหน้านี้ (PNG)</button>
@@ -274,6 +278,7 @@
   <script src="js/flood.js"></script>
   <script src="js/flood-forecast.js"></script>
   <script src="js/vulnerable.js"></script>
+  <script src="data/banpong-moo-river.js"></script>
   <script src="vendor/xlsx/xlsx.full.min.js"></script>
   <script>
   (function () {
@@ -304,7 +309,8 @@
       store.forecast = Object.assign({}, F0, store.forecast || {});
       if (!Array.isArray(store.forecast.sources)) store.forecast.sources = [];
       if (!Array.isArray(store.forecast.obs)) store.forecast.obs = [];
-      store.vuln = Object.assign({ tambons: ['คุ้งพยอม', 'บ้านม่วง'], mask: false, show: true, pins: {}, active: null }, store.vuln || {});
+      store.vuln = Object.assign({ tambons: ['คุ้งพยอม', 'บ้านม่วง'], mask: false, show: true, pins: {}, active: null, river: {} }, store.vuln || {});
+      if (!store.vuln.river || typeof store.vuln.river !== 'object') store.vuln.river = {};
       if (!store.vuln.pins || typeof store.vuln.pins !== 'object') store.vuln.pins = {};
       if (!(store.forecast.H > 0)) store.forecast.H = F0.H;
       if (!store.assign || typeof store.assign !== 'object') store.assign = {};
@@ -900,7 +906,38 @@
       if (k < 0) return null;
       return { depth: fcRes.depth[k] || 0, risk: !!(fcRes.risk && fcRes.risk[k]) };
     }
-    function vulnAll() { return vdata ? V.prioritize(vdata.records, { tambons: store.vuln.tambons.length ? store.vuln.tambons : null, pins: store.vuln.pins, floodAt: vulnFloodAt }) : []; }
+    var MOO_RIVER = (window.BANPONG_MOO_RIVER || { items: {} }).items;
+    // ค่าที่ผู้ใช้แก้ไข/ยืนยัน มาก่อนค่าประมาณเริ่มต้น
+    function riverInfo(key) {
+      var o = store.vuln.river[key], d = MOO_RIVER[key];
+      if (o) return { cls: o.cls, confirmed: !!o.confirmed, def: d };
+      return { cls: d ? d.cls : 'unknown', confirmed: false, def: d };
+    }
+    function vulnAll() { return vdata ? V.prioritize(vdata.records, { tambons: store.vuln.tambons.length ? store.vuln.tambons : null, pins: store.vuln.pins, floodAt: vulnFloodAt, river: riverInfo }) : []; }
+    function renderRiverTable() {
+      var t = $('riverTable'); t.textContent = '';
+      var h = document.createElement('tr');
+      ['ตำบล / หมู่', 'กลุ่มเปราะบาง', 'ที่ตั้งเทียบแม่น้ำ', 'ยืนยันแล้ว', 'ข้อมูลอ้างอิง (ค่าเริ่มต้น)'].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
+      t.appendChild(h);
+      vulnMoos().sort(function (a, b) { return a.river.rank - b.river.rank || a.tambon.localeCompare(b.tambon, 'th') || (parseInt(a.moo, 10) || 0) - (parseInt(b.moo, 10) || 0); }).forEach(function (g) {
+        var tr = document.createElement('tr'), info = riverInfo(g.key), d = info.def;
+        function td(el) { var c = document.createElement('td'); if (typeof el === 'string') c.textContent = el; else c.appendChild(el); tr.appendChild(c); return c; }
+        td('ต.' + g.tambon + ' ม.' + g.moo);
+        td(g.total + ' คน' + (g.levels[1] ? ' (ติดเตียง ' + g.levels[1] + ')' : ''));
+        var sel = document.createElement('select'); sel.setAttribute('aria-label', 'ที่ตั้งเทียบแม่น้ำ ต.' + g.tambon + ' ม.' + g.moo);
+        ['river', 'near', 'unknown', 'far'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = V.RIVER[k].label; sel.appendChild(o); });
+        sel.value = info.cls;
+        sel.onchange = function () { store.vuln.river[g.key] = { cls: sel.value, confirmed: cb.checked }; save(); vulnRender(); drawAll(); };
+        td(sel);
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = info.confirmed; cb.setAttribute('aria-label', 'ยืนยันแล้ว');
+        cb.onchange = function () { store.vuln.river[g.key] = { cls: sel.value, confirmed: cb.checked }; save(); vulnRender(); };
+        td(cb);
+        var ref = d ? (d.km != null ? '~' + d.km + ' กม. · ' : '') + d.ref + (d.note ? ' · ⚠ ' + d.note : '') : 'ไม่มีข้อมูล';
+        if (store.vuln.river[g.key] && (!d || store.vuln.river[g.key].cls !== d.cls)) ref += ' · แก้ไขแล้ว (เดิม: ' + V.RIVER[d ? d.cls : 'unknown'].label + ')';
+        var c = td(ref); c.className = 'hint'; c.style.whiteSpace = 'normal';
+        t.appendChild(tr);
+      });
+    }
     function vulnMoos() { return V.byMoo(vlist).sort(function (a, b) { return a.tambon.localeCompare(b.tambon, 'th') || (parseInt(a.moo, 10) || 0) - (parseInt(b.moo, 10) || 0); }); }
     function teamFor(tambon) {
       var t = store.teams.filter(function (x) { return (x.tambons || []).indexOf(tambon) >= 0; });
@@ -937,6 +974,7 @@
         b.onclick = function () { store.vuln.active = g.key; save(); vulnRender(); msg('เลือก ต.' + g.tambon + ' ม.' + g.moo + ' — ใช้เครื่องมือ “ปักตำแหน่งหมู่บ้าน” แล้วคลิกบนแผนที่'); };
         host.appendChild(b);
       });
+      renderRiverTable();
       // หน้า
       var sel = $('vulnPage'), n = V.pageCount(vlist), cur = Math.min(+sel.value || 0, n - 1);
       sel.textContent = '';
@@ -1005,9 +1043,9 @@
       (function next() { if (i < n) vulnSave(i++).then(next); })();
     };
     $('vulnCsv').onclick = function () {
-      var head = ['ลำดับช่วย', 'ระดับ', 'ชื่อ-สกุล', 'กลุ่ม', 'ข้อมูลเดิม', 'บ้านเลขที่', 'หมู่', 'ตำบล', 'รพ.สต.', 'สถานะน้ำ (หมู่บ้าน)', 'ชุดปฏิบัติการ'];
+      var head = ['ลำดับช่วย', 'ระดับ', 'ชื่อ-สกุล', 'กลุ่ม', 'ข้อมูลเดิม', 'บ้านเลขที่', 'หมู่', 'ตำบล', 'ที่ตั้งเทียบแม่น้ำ', 'รพ.สต.', 'สถานะน้ำ (หมู่บ้าน)', 'ชุดปฏิบัติการ'];
       var lines = [head].concat(vlist.map(function (r) {
-        return [r.rank, V.LEVELS[r.level].label, store.vuln.mask ? V.maskName(r.name) : r.name, r.group, r.groupRaw, r.house, r.moo, r.tambon, r.hc, V.floodText(r.flood), teamFor(r.tambon)];
+        return [r.rank, V.LEVELS[r.level].label, store.vuln.mask ? V.maskName(r.name) : r.name, r.group, r.groupRaw, r.house, r.moo, r.tambon, r.river.label + (r.river.key !== 'unknown' && !r.riverOk ? ' (ประมาณ)' : ''), r.hc, V.floodText(r.flood), teamFor(r.tambon)];
       }));
       var csv = '\ufeff' + lines.map(function (l) { return l.map(function (c) { c = String(c == null ? '' : c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(','); }).join('\n') + '\n';
       var file = 'vulnerable-priority-' + new Date().toISOString().slice(0, 10) + '.csv';
@@ -1032,7 +1070,7 @@
       return {
         stats: stats, colors: V.LEVELS.map(function (l) { return l && l.color; }), names: V.LEVELS.map(function (l) { return l && l.short; }),
         pins: groups.filter(function (g) { return g.pin; }).map(function (g) {
-          return { lon: g.pin[0], lat: g.pin[1], label: 'ม.' + g.moo, total: g.total, levels: g.levels, color: V.LEVELS[g.top].color, tambon: g.tambon, flooded: g.flood.key === 'flooded' };
+          return { lon: g.pin[0], lat: g.pin[1], label: 'ม.' + g.moo + (g.river.key === 'river' ? ' ริมน้ำ' : ''), total: g.total, levels: g.levels, color: V.LEVELS[g.top].color, tambon: g.tambon, flooded: g.flood.key === 'flooded' };
         })
       };
     }

@@ -47,3 +47,15 @@ test('อ่านทะเบียนและเรียงลำดับ�
   assert.strictEqual(g[0].total, 2);
   assert.strictEqual(V.maskName('นายทดสอบ หนึ่ง'), 'นายทดสอบ ห.');
 });
+
+test('หมู่ริมน้ำมาก่อนเมื่อสถานะน้ำท่วมเท่ากัน', () => {
+  const p = V.parseRows(rows);
+  const river = k => ({ 'บ้านม่วง|1': { cls: 'river' }, 'คุ้งพยอม|2': { cls: 'far', confirmed: true } })[k] || null;
+  const l = V.prioritize(p.records, { tambons: ['คุ้งพยอม', 'บ้านม่วง'], river });
+  // บ้านม่วง ม.1 ริมน้ำ (ระดับ 2, 3) มาก่อน คุ้งพยอม ม.2 ห่างน้ำ แม้จะมีผู้ติดเตียง
+  assert.deepStrictEqual(l.map(r => r.tambon), ['บ้านม่วง', 'บ้านม่วง', 'คุ้งพยอม', 'คุ้งพยอม']);
+  assert.strictEqual(l[0].river.key, 'river');
+  assert.strictEqual(l[0].riverOk, false);
+  assert.strictEqual(l[3].riverOk, true);
+  assert.strictEqual(V.byMoo(l)[0].key, 'บ้านม่วง|1');
+});
