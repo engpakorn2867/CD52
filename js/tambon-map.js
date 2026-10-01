@@ -387,6 +387,22 @@
       label(nm, null, ll[0], ll[1], '#111', fz, true);
     });
     cfg._teams = teamsShown;
+    // กลุ่มเปราะบางรายหมู่บ้าน: วงกลมสีตามระดับเร่งด่วนสูงสุด ตัวเลข = จำนวนคน (ขอบฟ้า = หมู่บ้านอยู่ในพื้นที่น้ำท่วม)
+    if (cfg.vuln) cfg.vuln.pins.forEach(function (pn) {
+      if (!inView(pn.lon, pn.lat) || (cfg.focus && cfg.focus.indexOf(pn.tambon) < 0)) return;
+      var q = P(pn.lon, pn.lat), r = cfg.focus ? 17 : 12;
+      ctx.save();
+      if (pn.flooded) { ctx.beginPath(); ctx.arc(q[0], q[1], r + 5, 0, Math.PI * 2); ctx.fillStyle = '#1565c0'; ctx.fill(); }
+      ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, Math.PI * 2); ctx.fillStyle = pn.color; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = '700 ' + (cfg.focus ? 16 : 12) + 'px "Sarabun","Noto Sans Thai",Tahoma,sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(pn.total), q[0], q[1] + 1);
+      ctx.textAlign = 'left'; ctx.font = '700 ' + (cfg.focus ? 15 : 12) + 'px "Sarabun","Noto Sans Thai",Tahoma,sans-serif';
+      var t = pn.label + (pn.levels[1] ? ' ติดเตียง ' + pn.levels[1] : '');
+      ctx.lineWidth = 3.5; ctx.strokeStyle = '#fff'; ctx.strokeText(t, q[0] + r + 5, q[1]); ctx.fillStyle = '#212121'; ctx.fillText(t, q[0] + r + 5, q[1]);
+      ctx.restore();
+    });
+
     // จุดน้ำเข้า (ท่อ ▼ / บึง ●) และจุดสำรวจน้ำท่วมจริง (◆)
     (cfg.floodPoints || []).forEach(function (pt) {
       if (!inView(pt.lon, pt.lat)) return;
@@ -573,6 +589,7 @@
       if (cfg.flood.riskM) legendItems.push(['rgba(255,152,0,0.6)', 'เสี่ยงท่วมถ้าน้ำขึ้นอีก ' + cfg.flood.riskM + ' ม.', 'box']);
     }
     var fpk = {}; (cfg.floodPoints || []).forEach(function (p) { fpk[p.kind] = 1; });
+    if (cfg.vuln && cfg.vuln.pins.length) legendItems.push([cfg.vuln.colors[1], 'กลุ่มเปราะบาง (ตัวเลข = จำนวนคน)', 'pin']);
     if (fpk.drain) legendItems.push(['#7b1fa2', 'ปากท่อ/ประตูระบายน้ำ', 'tri']);
     if (fpk.pond) legendItems.push(['#00838f', 'หนอง/บึงที่น้ำล้นเข้า', 'pin']);
     if (fpk.obs) legendItems.push(['#d50000', 'จุดสำรวจน้ำท่วมจริง', 'dia']);
@@ -641,6 +658,32 @@
       if (rows.length > maxRows && fits(20)) { ctx.font = '400 13px ' + font; ctx.fillStyle = '#666'; ctx.fillText('และอีก ' + (rows.length - maxRows) + ' ตำบล', lx, cy); cy += 20; }
       cy += 10;
     }
+
+    // กลุ่มเปราะบาง
+    if (cfg.vuln) (function () {
+      var st = cfg.vuln.stats, keys = Object.keys(st).filter(function (t) { return !cfg.focus || cfg.focus.indexOf(t) >= 0; });
+      if (!keys.length || !fits(60)) return;
+      var tot = { total: 0, levels: [0, 0, 0, 0, 0], flooded: 0 };
+      keys.forEach(function (t) { tot.total += st[t].total; tot.flooded += st[t].flooded; st[t].levels.forEach(function (n, i) { tot.levels[i] += n; }); });
+      ctx.font = '700 19px ' + font; ctx.fillStyle = '#4a148c';
+      ctx.fillText('กลุ่มเปราะบาง ' + tot.total + ' คน' + (tot.flooded ? ' · อยู่ในหมู่บ้านน้ำท่วม ' + tot.flooded : ''), lx, cy); cy += 24;
+      var xx = lx;
+      [1, 2, 3, 4].forEach(function (lv) {
+        if (!tot.levels[lv]) return;
+        var t = cfg.vuln.names[lv] + ' ' + tot.levels[lv];
+        ctx.font = '700 13px ' + font; var w2 = ctx.measureText(t).width + 16;
+        if (xx + w2 > x + w - 20) { xx = lx; cy += 26; }
+        ctx.fillStyle = cfg.vuln.colors[lv]; roundRect(ctx, xx, cy - 14, w2, 22, 5); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(t, xx + 8, cy + 2); xx += w2 + 6;
+      });
+      cy += 28;
+      if (keys.length > 1 && keys.length <= 5) keys.forEach(function (t) {
+        if (!fits(20)) return;
+        ctx.font = '400 13px ' + font; ctx.fillStyle = '#333';
+        ctx.fillText('ต.' + t + ': ' + st[t].total + ' คน (ติดเตียง ' + st[t].levels[1] + ') · ปักตำแหน่ง ' + st[t].pinned + '/' + st[t].moos + ' หมู่', lx, cy); cy += 19;
+      });
+      cy += 8;
+    })();
 
     // หน่วยงานรับผิดชอบ
     if (usedIds.length) {

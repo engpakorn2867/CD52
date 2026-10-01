@@ -34,7 +34,13 @@
     .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
     canvas { width: 100%; height: auto; display: block; border-radius: 6px; touch-action: manipulation; }
     canvas.assign, canvas.erase, canvas.team { cursor: pointer; }
-    canvas.draw, canvas.drain, canvas.pond, canvas.obs { cursor: crosshair; }
+    canvas.draw, canvas.drain, canvas.pond, canvas.obs, canvas.moo { cursor: crosshair; }
+    .privacy { border-left: 4px solid var(--bad); padding: 6px 10px; margin: 6px 4px; font-size: 13px; background: var(--chip); border-radius: 4px; }
+    .moo-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px; }
+    .moo-list button { font-size: 13px; padding: 3px 9px; }
+    .moo-list button.pinned { border-color: #2e7d32; }
+    .moo-list button.pinned::after { content: ' ✓'; color: #2e7d32; }
+    canvas.sheet { border: 1px solid var(--line); }
     .pts td input[type=number] { width: 86px; }
     .pts td input[type=text] { width: 100%; min-width: 120px; }
     .pts td select { min-width: 120px; }
@@ -174,6 +180,38 @@
       ค่าประมาณเพื่อวางแผน ความสูงพื้นที่คลาดเคลื่อนได้ ±0.5–1 ม. ไม่รวมคันกั้นน้ำ/ประตูระบายน้ำ</p>
   </div>
 
+  <div class="card" id="vulnCard">
+    <div class="card-head">
+      <h2>บัญชีกลุ่มเปราะบาง — เข้าช่วยเหลือเป็นลำดับแรก</h2>
+      <label class="chip"><input type="checkbox" id="vulnShow" checked> แสดงจุดบนแผนที่</label>
+    </div>
+    <div class="privacy">ข้อมูลรายชื่อเป็น<b>ข้อมูลส่วนบุคคลที่อ่อนไหว</b> (พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562) — ไฟล์ถูกอ่านและเก็บ<b>ในเบราว์เซอร์เครื่องนี้เท่านั้น</b>
+      ไม่ถูกส่งออกไปที่ใด ไม่รวมอยู่ในลิงก์ที่แชร์ และไม่รวมในปุ่ม “ส่งออก/นำเข้าข้อมูล” · ใช้เครื่องที่ปลอดภัย และกด “ลบรายชื่อออกจากเครื่องนี้” เมื่อเลิกใช้</div>
+    <div class="row" style="margin:6px 4px">
+      <label>นำเข้าทะเบียน (.xlsx / .csv) <input type="file" id="vulnFile" accept=".xlsx,.xls,.csv"></label>
+      <button type="button" id="vulnClear" class="danger" hidden>ลบรายชื่อออกจากเครื่องนี้</button>
+    </div>
+    <div class="hint" id="vulnStatus" role="status">ยังไม่มีข้อมูล — เลือกไฟล์ทะเบียนผู้ป่วยกลุ่มเปราะบาง (คอลัมน์: ชื่อ, กลุ่มเปราะบาง(ADL)/พิการ, บ้านเลขที่, หมู่ที่, ตำบล, รพ.สต.)</div>
+    <div id="vulnBody" hidden>
+      <div class="hint">ตำบลที่จัดทำบัญชี</div>
+      <div id="vulnTambons"></div>
+      <div class="row" style="margin:6px 4px">
+        <label class="chip"><input type="checkbox" id="vulnMask"> ปิดบังนามสกุลในภาพ (เมื่อต้องส่งต่อ)</label>
+        <span class="hint" id="vulnLevels"></span>
+      </div>
+      <div class="hint">ตำแหน่งหมู่บ้าน: เลือกหมู่ แล้วใช้เครื่องมือ <b>ปักตำแหน่งหมู่บ้าน</b> ใต้แผนที่ คลิกกลางหมู่บ้าน (ระบบเลื่อนไปหมู่ถัดไปให้อัตโนมัติ) —
+        ใช้หาว่าหมู่บ้านใดอยู่ในพื้นที่น้ำท่วมตามการคาดการณ์ และแสดงจำนวนกลุ่มเปราะบางบนแผนที่</div>
+      <div class="moo-list" id="mooList"></div>
+      <div class="row" style="margin:8px 4px">
+        <label>หน้า <select id="vulnPage"></select></label>
+        <button type="button" class="primary" id="vulnSavePage">บันทึกรูปหน้านี้ (PNG)</button>
+        <button type="button" id="vulnSaveAll">บันทึกทุกหน้า</button>
+        <button type="button" id="vulnCsv">บันทึกรายชื่อเรียงลำดับ (CSV)</button>
+      </div>
+      <canvas id="vulnCanvas" class="sheet" width="1754" height="1240" aria-label="ภาพบัญชีกลุ่มเปราะบาง"></canvas>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-head">
       <h2>หน่วยงานรับผิดชอบ</h2>
@@ -235,6 +273,8 @@
   <script src="js/tambon-map.js"></script>
   <script src="js/flood.js"></script>
   <script src="js/flood-forecast.js"></script>
+  <script src="js/vulnerable.js"></script>
+  <script src="vendor/xlsx/xlsx.full.min.js"></script>
   <script>
   (function () {
     'use strict';
@@ -264,6 +304,8 @@
       store.forecast = Object.assign({}, F0, store.forecast || {});
       if (!Array.isArray(store.forecast.sources)) store.forecast.sources = [];
       if (!Array.isArray(store.forecast.obs)) store.forecast.obs = [];
+      store.vuln = Object.assign({ tambons: ['คุ้งพยอม', 'บ้านม่วง'], mask: false, show: true, pins: {}, active: null }, store.vuln || {});
+      if (!store.vuln.pins || typeof store.vuln.pins !== 'object') store.vuln.pins = {};
       if (!(store.forecast.H > 0)) store.forecast.H = F0.H;
       if (!store.assign || typeof store.assign !== 'object') store.assign = {};
       if (!store.agencies.length) addAgency();
@@ -483,7 +525,7 @@
         tools.appendChild(document.createTextNode('เครื่องมือ:'));
         var btns = {};
         [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ'], ['team', 'วางจุดชุดปฏิบัติการ'],
-          ['drain', 'ปักท่อระบายน้ำ'], ['pond', 'ปักหนอง/บึง'], ['obs', 'ปักจุดน้ำท่วมจริง']].forEach(function (t) {
+          ['drain', 'ปักท่อระบายน้ำ'], ['pond', 'ปักหนอง/บึง'], ['obs', 'ปักจุดน้ำท่วมจริง'], ['moo', 'ปักตำแหน่งหมู่บ้าน']].forEach(function (t) {
           var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1]; b.dataset.tool = t[0];
           b.onclick = function () { setTool(v, t[0]); };
           tools.appendChild(b); btns[t[0]] = b;
@@ -571,6 +613,16 @@
         var inp = document.querySelector('#obsTable [data-id="' + ob.id + '"] [data-field=depth]');
         if (inp) { inp.scrollIntoView({ block: 'center' }); inp.focus(); }
         msg('เพิ่มจุดสำรวจแล้ว — กรอกความลึกน้ำที่วัดได้');
+      } else if (v.tool === 'moo') {
+        var key = store.vuln.active;
+        if (!key) { msg('ยังไม่ได้เลือกหมู่ — นำเข้าทะเบียนกลุ่มเปราะบาง แล้วเลือกหมู่ในการ์ด “บัญชีกลุ่มเปราะบาง”'); return; }
+        var tb = key.split('|')[0], inM = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
+        store.vuln.pins[key] = [ll[0], ll[1]];
+        var nxt = vulnMoos().filter(function (g) { return !store.vuln.pins[g.key]; })[0];
+        store.vuln.active = nxt ? nxt.key : key;
+        msg('ปักตำแหน่ง ต.' + tb + ' ม.' + key.split('|')[1] + (inM && inM.properties.th !== tb ? ' — ⚠ จุดนี้อยู่ใน ต.' + inM.properties.th : '') +
+          (nxt ? ' · ถัดไป: ต.' + nxt.tambon + ' ม.' + nxt.moo : ' · ปักครบทุกหมู่แล้ว'));
+        save(); vulnRender(); drawAll();
       }
     }
     function finishDraft(v, label) {
@@ -673,7 +725,7 @@
     function fcChanged(redraw) {
       save();
       clearTimeout(fcTimer);
-      fcTimer = setTimeout(function () { fcCompute(); renderPoints(true); if (redraw !== false) drawAll(); }, 120);
+      fcTimer = setTimeout(function () { fcCompute(); renderPoints(true); vulnRender(); if (redraw !== false) drawAll(); }, 120);
     }
     function setH(h) {
       var f = store.forecast; f.H = Math.max(8, Math.min(14, Math.round(h * 100) / 100));
@@ -692,7 +744,7 @@
     $('fcMode').onchange = function () { store.forecast.mode = this.value; fcInputs(); fcChanged(); };
     $('fcHours').oninput = function () { var v = parseFloat(this.value); if (v > 0) { store.forecast.hours = v; fcChanged(); } };
     $('fcRisk').onchange = function () { store.forecast.risk = parseFloat(this.value) || 0; fcChanged(); };
-    $('fcShow').onchange = function () { store.forecast.show = this.checked; save(); drawAll(); };
+    $('fcShow').onchange = function () { store.forecast.show = this.checked; save(); vulnRender(); drawAll(); };
     Array.prototype.forEach.call(document.querySelectorAll('[data-dh]'), function (b) {
       b.onclick = function () { setH(store.forecast.H + parseFloat(b.dataset.dh)); };
     });
@@ -751,7 +803,7 @@
       save();
       $('scnStatus').textContent = 'กำลังคำนวณพื้นที่ใหม่…';
       clearTimeout(scnTimer);
-      scnTimer = setTimeout(function () { applyScenario(); fcCompute(); renderPoints(true); drawAll(); }, 250);
+      scnTimer = setTimeout(function () { applyScenario(); fcCompute(); renderPoints(true); vulnRender(); drawAll(); }, 250);
     }
     function ptCell(tr, el) { var td = document.createElement('td'); td.appendChild(el); tr.appendChild(td); return el; }
     function ptInput(obj, key, type, ph, step, onChange) {
@@ -839,6 +891,152 @@
       return out;
     }
 
+    // ---------- บัญชีกลุ่มเปราะบาง (ข้อมูลรายชื่อเก็บแยก เฉพาะเครื่องนี้) ----------
+    var V = window.Vulnerable, VKEY = 'banpong-vulnerable-v1', vdata = null, vlist = [];
+    try { vdata = JSON.parse(localStorage.getItem(VKEY) || 'null'); } catch (e) { vdata = null; }
+    function vulnFloodAt(lon, lat) {
+      if (!fcGrid || !fcRes || !store.forecast.show) return null;
+      var k = fcGrid.cellOf(lon, lat);
+      if (k < 0) return null;
+      return { depth: fcRes.depth[k] || 0, risk: !!(fcRes.risk && fcRes.risk[k]) };
+    }
+    function vulnAll() { return vdata ? V.prioritize(vdata.records, { tambons: store.vuln.tambons.length ? store.vuln.tambons : null, pins: store.vuln.pins, floodAt: vulnFloodAt }) : []; }
+    function vulnMoos() { return V.byMoo(vlist).sort(function (a, b) { return a.tambon.localeCompare(b.tambon, 'th') || (parseInt(a.moo, 10) || 0) - (parseInt(b.moo, 10) || 0); }); }
+    function teamFor(tambon) {
+      var t = store.teams.filter(function (x) { return (x.tambons || []).indexOf(tambon) >= 0; });
+      return t.map(function (x) { return x.name || 'ชุดปฏิบัติการ'; }).join(', ');
+    }
+    function vulnTitleParts() {
+      var tb = store.vuln.tambons.length ? store.vuln.tambons : null;
+      var names = tb ? tb.map(function (t) { return 'ต.' + t; }) : ['ทุกตำบล'];
+      return (names.length > 1 ? names.slice(0, -1).join(' ') + ' และ ' + names[names.length - 1] : names[0]) + ' อ.บ้านโป่ง จ.ราชบุรี';
+    }
+    function vulnSubtitle() {
+      var f = store.forecast;
+      return vulnTitleParts() + ' · คาดการณ์ K.55A ' + f.H.toFixed(2) + ' ม.รทก. · จัดทำ ' + new Date().toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+    function vulnRender() {
+      var has = !!(vdata && vdata.records && vdata.records.length);
+      $('vulnBody').hidden = !has; $('vulnClear').hidden = !has;
+      if (!has) { vlist = []; return; }
+      vlist = vulnAll();
+      var c = [0, 0, 0, 0, 0]; vlist.forEach(function (r) { c[r.level]++; });
+      $('vulnStatus').textContent = 'ทะเบียน: ' + (vdata.source || 'ไฟล์ที่นำเข้า') + ' · ทั้งหมด ' + vdata.records.length + ' คน · ในตำบลที่เลือก ' + vlist.length + ' คน' +
+        ' (ติดเตียง ' + c[1] + ' · ติดบ้าน/เคลื่อนไหว ' + c[2] + ' · สื่อสาร/จิต ' + c[3] + (c[4] ? ' · ไม่ระบุ ' + c[4] : '') + ')';
+      $('vulnLevels').textContent = V.LEVELS.slice(1, 4).map(function (l) { return l.label; }).join(' · ');
+      // หมู่บ้าน
+      var host = $('mooList'); host.textContent = '';
+      var moos = vulnMoos();
+      if (!store.vuln.active || !moos.some(function (g) { return g.key === store.vuln.active; })) store.vuln.active = moos.length ? moos[0].key : null;
+      moos.forEach(function (g) {
+        var b = document.createElement('button'); b.type = 'button';
+        b.textContent = 'ต.' + g.tambon + ' ม.' + g.moo + ' (' + g.total + (g.levels[1] ? ', ติดเตียง ' + g.levels[1] : '') + ')';
+        if (store.vuln.pins[g.key]) b.classList.add('pinned');
+        if (g.key === store.vuln.active) b.classList.add('on');
+        b.title = store.vuln.pins[g.key] ? 'ปักตำแหน่งแล้ว — คลิกเพื่อเลือก แล้วปักใหม่ได้' : 'ยังไม่ปักตำแหน่ง';
+        b.onclick = function () { store.vuln.active = g.key; save(); vulnRender(); msg('เลือก ต.' + g.tambon + ' ม.' + g.moo + ' — ใช้เครื่องมือ “ปักตำแหน่งหมู่บ้าน” แล้วคลิกบนแผนที่'); };
+        host.appendChild(b);
+      });
+      // หน้า
+      var sel = $('vulnPage'), n = V.pageCount(vlist), cur = Math.min(+sel.value || 0, n - 1);
+      sel.textContent = '';
+      for (var i = 0; i < n; i++) { var o = document.createElement('option'); o.value = i; o.textContent = i === 0 ? '1 — สรุปรายหมู่บ้าน' : (i + 1) + ' — รายชื่อลำดับ ' + ((i - 1) * V.PER_PAGE + 1) + '–' + Math.min(vlist.length, i * V.PER_PAGE); sel.appendChild(o); }
+      sel.value = cur;
+      vulnDraw($('vulnCanvas'), cur);
+    }
+    function vulnDraw(cv, page) {
+      V.renderPage({ canvas: cv, list: vlist, page: page, subtitle: vulnSubtitle(), source: vdata.source, mask: store.vuln.mask, teamFor: teamFor });
+    }
+    function vulnFileName(page) { return 'vulnerable-priority-' + new Date().toISOString().slice(0, 10) + '-p' + (page + 1) + '.png'; }
+    function vulnSave(page) {
+      var cv = document.createElement('canvas'); cv.width = 1754; cv.height = 1240;
+      vulnDraw(cv, page);
+      return new Promise(function (res) {
+        cv.toBlob(function (blob) {
+          var file = vulnFileName(page);
+          saveViaViewer(file, blob, 'รูป ' + file).then(function (handled) {
+            if (!handled) {
+              var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+            }
+            res();
+          });
+        }, 'image/png');
+      });
+    }
+    function readTable(file) {
+      return file.arrayBuffer().then(function (buf) {
+        if (!window.XLSX) throw new Error('โหลดตัวอ่านไฟล์ Excel ไม่สำเร็จ');
+        var wb = XLSX.read(buf, { type: 'array' });
+        // ใช้แผ่นงานแรกที่มีหัวตาราง ชื่อ + ตำบล
+        for (var i = 0; i < wb.SheetNames.length; i++) {
+          var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header: 1, raw: true, defval: null });
+          try {
+            var p = V.parseRows(rows), title = rows.slice(0, 3).map(function (r) { return (r || []).filter(Boolean).join(' '); }).join(' ');
+            var org = /หน่วยงาน[:\s.]*([^.]+?)\.{2,}/.exec(title), dt = /วันที่จัดทำ[:\s.]*([\d./\s]+)/.exec(title);
+            p.source = (wb.SheetNames[i] || 'ทะเบียน') + (org ? ' ' + org[1].trim() : '') + (dt ? ' (' + dt[1].replace(/\.+/g, '').replace(/\s+/g, '').replace(/\/+$/, '') + ')' : '');
+            return p;
+          } catch (e) { if (i === wb.SheetNames.length - 1) throw e; }
+        }
+      });
+    }
+    $('vulnFile').onchange = function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      $('vulnStatus').textContent = 'กำลังอ่านไฟล์…';
+      readTable(f).then(function (p) {
+        vdata = { records: p.records, source: p.source, importedAt: new Date().toISOString() };
+        try { localStorage.setItem(VKEY, JSON.stringify(vdata)); } catch (err) { /* เก็บไม่ได้ ใช้เฉพาะรอบนี้ */ }
+        e.target.value = '';
+        vulnRender(); drawAll();
+        msg('นำเข้า ' + p.records.length + ' รายชื่อแล้ว (เก็บเฉพาะในเบราว์เซอร์เครื่องนี้)');
+      }).catch(function (err) { $('vulnStatus').textContent = 'อ่านไฟล์ไม่สำเร็จ: ' + err.message; });
+    };
+    twoStepDelete($('vulnClear'), function () {
+      vdata = null; vlist = [];
+      try { localStorage.removeItem(VKEY); } catch (e) { /* */ }
+      $('vulnStatus').textContent = 'ลบรายชื่อออกจากเครื่องนี้แล้ว (ตำแหน่งหมู่บ้านยังเก็บไว้)';
+      vulnRender(); drawAll();
+    });
+    $('vulnShow').onchange = function () { store.vuln.show = this.checked; save(); drawAll(); };
+    $('vulnMask').onchange = function () { store.vuln.mask = this.checked; save(); vulnRender(); };
+    $('vulnPage').onchange = function () { vulnDraw($('vulnCanvas'), +this.value); };
+    $('vulnSavePage').onclick = function () { vulnSave(+$('vulnPage').value); };
+    $('vulnSaveAll').onclick = function () {
+      var n = V.pageCount(vlist), i = 0;
+      (function next() { if (i < n) vulnSave(i++).then(next); })();
+    };
+    $('vulnCsv').onclick = function () {
+      var head = ['ลำดับช่วย', 'ระดับ', 'ชื่อ-สกุล', 'กลุ่ม', 'ข้อมูลเดิม', 'บ้านเลขที่', 'หมู่', 'ตำบล', 'รพ.สต.', 'สถานะน้ำ (หมู่บ้าน)', 'ชุดปฏิบัติการ'];
+      var lines = [head].concat(vlist.map(function (r) {
+        return [r.rank, V.LEVELS[r.level].label, store.vuln.mask ? V.maskName(r.name) : r.name, r.group, r.groupRaw, r.house, r.moo, r.tambon, r.hc, V.floodText(r.flood), teamFor(r.tambon)];
+      }));
+      var csv = '\ufeff' + lines.map(function (l) { return l.map(function (c) { c = String(c == null ? '' : c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(','); }).join('\n') + '\n';
+      var file = 'vulnerable-priority-' + new Date().toISOString().slice(0, 10) + '.csv';
+      saveViaViewer(file, csv, 'ไฟล์ ' + file).then(function (ok) {
+        if (ok) return;
+        var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+      });
+    };
+    function vulnTambonChips() {
+      var host = $('vulnTambons'); host.textContent = '';
+      host.appendChild(tambonChips(store.vuln.tambons, function () { save(); vulnRender(); drawAll(); }));
+    }
+    function vulnPinsCfg() {
+      if (!store.vuln.show || !vlist.length) return null;
+      var groups = V.byMoo(vlist), stats = {};
+      groups.forEach(function (g) {
+        var st = stats[g.tambon] = stats[g.tambon] || { total: 0, levels: [0, 0, 0, 0, 0], flooded: 0, moos: 0, pinned: 0 };
+        st.total += g.total; st.moos++; if (g.pin) st.pinned++;
+        g.levels.forEach(function (n, i) { st.levels[i] += n; });
+        if (g.flood.key === 'flooded') st.flooded += g.total;
+      });
+      return {
+        stats: stats, colors: V.LEVELS.map(function (l) { return l && l.color; }), names: V.LEVELS.map(function (l) { return l && l.short; }),
+        pins: groups.filter(function (g) { return g.pin; }).map(function (g) {
+          return { lon: g.pin[0], lat: g.pin[1], label: 'ม.' + g.moo, total: g.total, levels: g.levels, color: V.LEVELS[g.top].color, tambon: g.tambon, flooded: g.flood.key === 'flooded' };
+        })
+      };
+    }
+
     function floodCfg() {
       if (!fcRes || !store.forecast.show) return null;
       return { image: fcImage, grid: FMETA, res: fcRes, H: store.forecast.H, Q: store.forecast.Q, riskM: store.forecast.risk, note: fcNote(),
@@ -872,7 +1070,7 @@
           title: viewTitle(v), subtitle: v.fixed ? 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' : 'แนวแม่น้ำแม่กลอง หน่วยงานรับผิดชอบ และชุดปฏิบัติการ',
           tiles: [], note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
           basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.fixed ? store.allMode : (v.mode || 'plain'),
-          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg(), floodPoints: pointsCfg() };
+          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg(), floodPoints: pointsCfg(), vuln: vulnPinsCfg() };
         v.proj = TM.render(cfg);
         var list = Object.keys(cfg._used || {}).map(function (id) {
           var a = agencyById(id), u = cfg._used[id];
@@ -945,7 +1143,7 @@
         var v = JSON.parse(document.getElementById('dataText').value);
         if (!v || !Array.isArray(v.agencies)) throw new Error('ไม่พบรายการหน่วยงานในข้อความ');
         store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active, teams: v.teams || [], activeTeam: v.activeTeam,
-          views: v.views, separate: v.separate, allMode: v.allMode, forecast: v.forecast };
+          views: v.views, separate: v.separate, allMode: v.allMode, forecast: v.forecast, vuln: v.vuln };
         normalize(); save(); renderAll();
         dataMsg('นำเข้าข้อมูลแล้ว: ' + store.agencies.length + ' หน่วยงาน, ' + store.teams.length + ' ชุดปฏิบัติการ, ' + store.views.length + ' แผนที่เจาะจง');
       } catch (err) { dataMsg('นำเข้าไม่สำเร็จ: ' + err.message + ' — ตรวจว่าวางข้อความที่คัดลอกจากปุ่มส่งออกครบทั้งหมด'); }
@@ -967,7 +1165,8 @@
         if (!g) { $('fcStatus').textContent = 'โหลดข้อมูลความสูงพื้นที่ไม่สำเร็จ'; return; }
         fcInputs(); $('obsRadius').value = store.forecast.obsRadius;
         applyScenario(); fcCompute(); renderPoints();
-      }).then(drawAll);
+      }).then(function () { vulnRender(); return drawAll(); });
+      $('vulnShow').checked = store.vuln.show; $('vulnMask').checked = store.vuln.mask; vulnTambonChips(); vulnRender();
     }
     load(); renderAll();
     // รอฟอนต์ Sarabun ก่อนวาดลงภาพ (ไม่เกิน 3 วินาที)

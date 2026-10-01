@@ -1,2 +1,7 @@
 node_modules/
 .cache/
+
+# ข้อมูลส่วนบุคคล (ทะเบียนกลุ่มเปราะบาง ฯลฯ) — ห้าม commit
+*.xlsx
+*.xls
+data/private/
