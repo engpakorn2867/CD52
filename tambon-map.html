@@ -3,13 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>แผนที่ตำบลริมแม่กลอง บ้านโป่ง</title>
+  <title>แผนที่ตำบลบ้านโป่ง</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap">
   <style>
-    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; --bad: #c62828; }
+    /* เครื่องมือแผนที่: แผงข้อมูลด้านบน การ์ดแผนที่เรียงลง ภาพแผนที่สีขาวคงที่ (ใช้พิมพ์/ส่งต่อ) */
+    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; --bad: #c62828; --shade: rgba(10,16,24,0.72); }
     @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; }
+      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); color-scheme: dark; }
     }
+    :root[data-theme="dark"] { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); color-scheme: dark; }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body { margin: 0; background: var(--bg); color: var(--text);
       font-family: "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif; }
     header { padding: 14px 16px 4px; }
@@ -41,6 +45,16 @@
     .wrap-table { overflow-x: auto; }
     .hint { font-size: 13px; color: var(--muted); margin: 6px 4px; }
     .assigns { font-size: 13px; color: var(--muted); margin: 6px 4px 0; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .overlay { position: fixed; inset: 0; background: var(--shade); z-index: 50; display: flex; align-items: center; justify-content: center;
+      padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+    .overlay .box { background: var(--panel); color: var(--text); border-radius: 10px; padding: 12px; max-width: 1100px; width: 100%;
+      max-height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+    .overlay img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+    .overlay textarea { width: 100%; min-height: 220px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--bg); color: var(--text);
+      border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .zone-name { min-width: 0; width: 220px; max-width: 100%; }
   </style>
 </head>
 <body>
@@ -53,19 +67,15 @@
       <select id="bg">
         <option value="street">แผนที่ถนน (แบบแผนที่เขต)</option>
         <option value="none">แบบเรียบ</option>
-        <option value="sat">ภาพดาวเทียม (Esri)</option>
       </select>
     </label>
-    <a href="index.html">← กลับไปแผนที่คาดการณ์น้ำท่วม</a>
   </div>
 
   <div class="card">
     <div class="card-head">
       <h2>หน่วยงานรับผิดชอบ</h2>
       <button type="button" id="addAgency">+ เพิ่มหน่วยงาน</button>
-      <button type="button" id="exportJson">ส่งออกข้อมูล (.json)</button>
-      <button type="button" id="importBtn">นำเข้าข้อมูล</button>
-      <input type="file" id="importJson" accept=".json,application/json" hidden>
+      <button type="button" id="exportJson">ส่งออก / นำเข้าข้อมูล</button>
     </div>
     <div class="wrap-table">
       <table class="ag">
@@ -74,11 +84,35 @@
       </table>
     </div>
     <p class="hint">เลือก “ใช้” ที่หน่วยงาน แล้ว: <b>คลิกตำบล</b> = กำหนด/ยกเลิกหน่วยงานให้ทั้งตำบล · <b>วาดกรอบ</b> = คลิกทีละจุดรอบพื้นที่ แล้วกด “เสร็จ” (หรือดับเบิลคลิก) ·
-      <b>ลบกรอบ</b> = คลิกในกรอบที่ต้องการลบ · ข้อมูลบันทึกในเบราว์เซอร์นี้อัตโนมัติ ใช้ “ส่งออกข้อมูล” เพื่อเก็บสำรอง/ส่งต่อ</p>
+      <b>ลบกรอบ</b> = คลิกในกรอบที่ต้องการลบ · ข้อมูลบันทึกในเบราว์เซอร์นี้อัตโนมัติ ใช้ “ส่งออก / นำเข้าข้อมูล” เพื่อเก็บสำรองหรือส่งต่อให้เครื่องอื่น</p>
   </div>
   <div id="msg" class="msg" role="status"></div>
 
   <div id="views"></div>
+
+  <div class="overlay" id="imgBox" hidden>
+    <div class="box" role="dialog" aria-label="ภาพสำหรับบันทึก">
+      <div class="row"><b id="imgTitle">บันทึกภาพ</b><span style="flex:1"></span><button type="button" id="imgClose">ปิด</button></div>
+      <p>คลิกขวาที่ภาพ แล้วเลือก “บันทึกรูปภาพเป็น…” (มือถือ: กดค้างที่ภาพ แล้วเลือกบันทึกรูป) · ถ้าเบราว์เซอร์ดาวน์โหลดไฟล์ให้แล้ว ปิดหน้าต่างนี้ได้เลย</p>
+      <img id="imgOut" alt="ภาพแผนที่สำหรับบันทึก">
+    </div>
+  </div>
+
+  <div class="overlay" id="dataBox" hidden>
+    <div class="box" role="dialog" aria-label="ส่งออกและนำเข้าข้อมูลหน่วยงาน">
+      <div class="row"><b>ส่งออก / นำเข้าข้อมูลหน่วยงาน</b><span style="flex:1"></span><button type="button" id="dataClose">ปิด</button></div>
+      <p>ส่งออก: คัดลอกข้อความด้านล่างเก็บไว้ (เช่น วางในไลน์หรือโน้ต) · นำเข้า: วางข้อความที่เคยคัดลอก หรือเลือกไฟล์ .json แล้วกด “นำเข้า”</p>
+      <textarea id="dataText" spellcheck="false" aria-label="ข้อมูลหน่วยงาน (JSON)"></textarea>
+      <div class="row">
+        <button type="button" id="dataCopy">คัดลอกข้อความ</button>
+        <button type="button" id="dataSave" hidden>บันทึกเป็นไฟล์ .json</button>
+        <label>ไฟล์ .json <input type="file" id="importJson" accept=".json,application/json"></label>
+        <span style="flex:1"></span>
+        <button type="button" class="primary" id="dataImport">นำเข้า (แทนที่ข้อมูลปัจจุบัน)</button>
+      </div>
+      <div id="dataMsg" class="hint" role="status"></div>
+    </div>
+  </div>
 
   <script src="data/banpong-tambons.js"></script>
   <script src="data/maeklong-river.js"></script>
@@ -142,7 +176,12 @@
         });
         var del = cell(document.createElement('button')); del.type = 'button'; del.className = 'danger'; del.textContent = 'ลบ';
         del.onclick = function () {
-          if (!confirm('ลบ “' + (a.name || 'หน่วยงาน') + '” และพื้นที่ที่กำหนดให้หน่วยงานนี้?')) return;
+          // ยืนยันสองขั้น (กล่อง confirm ใช้ไม่ได้ในบางที่)
+          if (!del.dataset.armed) {
+            del.dataset.armed = '1'; del.textContent = 'กดอีกครั้งเพื่อลบ';
+            setTimeout(function () { delete del.dataset.armed; del.textContent = 'ลบ'; }, 4000);
+            return;
+          }
           store.agencies = store.agencies.filter(function (x) { return x !== a; });
           Object.keys(store.assign).forEach(function (t) { if (store.assign[t] === a.id) delete store.assign[t]; });
           store.zones = store.zones.filter(function (z) { return z.agency !== a.id; });
@@ -188,13 +227,15 @@
         });
         var done = document.createElement('button'); done.type = 'button'; done.textContent = 'เสร็จ (ปิดกรอบ)'; done.hidden = true;
         done.onclick = function () { finishDraft(v); };
+        var zname = document.createElement('input'); zname.type = 'text'; zname.className = 'zone-name'; zname.hidden = true;
+        zname.placeholder = 'ชื่อกรอบ (ไม่ใส่ = ชื่อหน่วยงาน)'; zname.id = 'zname-' + v.id; zname.setAttribute('aria-label', 'ชื่อกรอบพื้นที่');
         var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'ยกเลิกกรอบที่วาด'; cancel.hidden = true;
-        cancel.onclick = function () { v.draft = null; done.hidden = cancel.hidden = true; draw(v); };
-        tools.appendChild(done); tools.appendChild(cancel);
+        cancel.onclick = function () { v.draft = null; done.hidden = cancel.hidden = zname.hidden = true; draw(v); };
+        tools.appendChild(zname); tools.appendChild(done); tools.appendChild(cancel);
         card.appendChild(tools);
         var assigns = document.createElement('div'); assigns.className = 'assigns'; card.appendChild(assigns);
         host.appendChild(card);
-        cards[v.id] = { cv: cv, btns: btns, done: done, cancel: cancel, assigns: assigns };
+        cards[v.id] = { cv: cv, btns: btns, done: done, cancel: cancel, zname: zname, assigns: assigns };
         cv.addEventListener('click', function (e) { onClick(v, e); });
         cv.addEventListener('dblclick', function (e) { if (v.tool === 'draw') { e.preventDefault(); finishDraft(v); } });
         setTool(v, 'none', true);
@@ -205,7 +246,7 @@
       var c = cards[v.id];
       Object.keys(c.btns).forEach(function (k) { c.btns[k].classList.toggle('on', k === t); });
       c.cv.className = t;
-      c.done.hidden = c.cancel.hidden = true;
+      c.done.hidden = c.cancel.hidden = c.zname.hidden = true;
       if (!silent) draw(v);
     }
     function canvasLonLat(v, e) {
@@ -232,7 +273,7 @@
         if (e.detail > 1) return; // คลิกที่สองของดับเบิลคลิก
         v.draft = v.draft || { agency: a.id, pts: [] };
         v.draft.pts.push(ll);
-        cards[v.id].done.hidden = cards[v.id].cancel.hidden = false;
+        cards[v.id].done.hidden = cards[v.id].cancel.hidden = cards[v.id].zname.hidden = false;
         msg('วาดกรอบ: ' + v.draft.pts.length + ' จุด (อย่างน้อย 3 จุด แล้วกด “เสร็จ”)');
         draw(v);
       } else if (v.tool === 'erase') {
@@ -247,10 +288,11 @@
     }
     function finishDraft(v, label) {
       if (!v.draft || v.draft.pts.length < 3) { msg('ต้องมีอย่างน้อย 3 จุด'); return; }
-      if (label == null) label = prompt('ชื่อกรอบพื้นที่ (เว้นว่าง = ใช้ชื่อหน่วยงาน)', '') || '';
+      if (label == null) label = cards[v.id].zname.value || '';
       store.zones.push({ id: uid(), agency: v.draft.agency, pts: v.draft.pts, label: String(label).trim() });
       v.draft = null;
-      cards[v.id].done.hidden = cards[v.id].cancel.hidden = true;
+      cards[v.id].done.hidden = cards[v.id].cancel.hidden = cards[v.id].zname.hidden = true;
+      cards[v.id].zname.value = '';
       msg('เพิ่มกรอบพื้นที่แล้ว'); changed();
     }
 
@@ -270,29 +312,11 @@
         img.src = LC.png;
       });
     }
-    function loadTiles(v) {
-      var bp = features.filter(function (f) { return f.properties.role === 'banpong' && (!v.focus || v.focus.indexOf(f.properties.th) >= 0); });
-      var bb = TM.bboxOf(bp), pad = v.focus ? 0.6 : 0.15, w = bb[2] - bb[0], h = bb[3] - bb[1];
-      var z = v.focus ? 14 : 12, n = Math.pow(2, z), jobs = [];
-      var tx0 = Math.floor(TM.mx(bb[0] - w * pad) * n), tx1 = Math.floor(TM.mx(bb[2] + w * pad) * n);
-      var ty0 = Math.floor(TM.my(bb[3] + h * pad) * n), ty1 = Math.floor(TM.my(bb[1] - h * pad) * n);
-      for (var y = ty0; y <= ty1; y++) for (var x = tx0; x <= tx1; x++) (function (x, y) {
-        jobs.push(new Promise(function (res) {
-          var img = new Image(); img.crossOrigin = 'anonymous';
-          img.onload = function () { res({ img: img, x: x, y: y, z: z }); };
-          img.onerror = function () { res(null); };
-          img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + z + '/' + y + '/' + x;
-        }));
-      })(x, y);
-      return Promise.all(jobs).then(function (t) { return t.filter(Boolean); });
-    }
-    var lcPromise = loadLandcover(), tileCache = {};
+    var lcPromise = loadLandcover();
     function draw(v) {
       var bgv = document.getElementById('bg').value;
       return lcPromise.then(function (lc) {
-        var tilesP = bgv === 'sat' ? (tileCache[v.id] = tileCache[v.id] || loadTiles(v)) : Promise.resolve([]);
-        return tilesP.then(function (tiles) {
-          if (bgv === 'sat' && !tiles.length) msg('โหลดภาพดาวเทียมไม่ได้ — แสดงแบบเรียบแทน');
+        return Promise.resolve([]).then(function (tiles) {
           var cfg = { canvas: cards[v.id].cv, features: features, river: river, landcover: lc, focus: v.focus,
             title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
             basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.mode,
@@ -307,41 +331,82 @@
       });
     }
     function drawAll() { return Promise.all(VIEWS.map(draw)); }
+    // เมื่อเปิดผ่านลิงก์ claude.ai: ใช้ความสามารถ downloads ของหน้า (ผู้ชมกดยืนยันก่อนบันทึก)
+    var downloadsP = window.claude && typeof window.claude.use === 'function'
+      ? window.claude.use('downloads').catch(function () { return null; }) : Promise.resolve(null);
+    function saveViaViewer(filename, data, label) {
+      return downloadsP.then(function (dl) {
+        if (!dl) return false;
+        return dl.save({ filename: filename, data: data }).then(function () { msg('บันทึก ' + label + ' แล้ว'); return true; }, function (e) {
+          var code = e && e.code;
+          if (code === 'declined') { msg('ยกเลิกการบันทึก'); return true; }
+          if (code === 'rate_limited') { msg('มีหน้าต่างบันทึกเปิดอยู่ ลองอีกครั้งในอีกสักครู่'); return true; }
+          return false; // ใช้วิธีสำรอง
+        });
+      });
+    }
+    // บันทึกภาพ: ลองดาวน์โหลดไฟล์ และแสดงภาพให้คลิกขวา/กดค้างบันทึก (กรณีหน้าเว็บไม่อนุญาตดาวน์โหลด)
     function exportPng(v) {
       var cv = cards[v.id].cv;
-      try {
-        cv.toBlob(function (blob) {
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(blob); a.download = v.file + '.png';
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
-        }, 'image/png');
-      } catch (e) {
-        msg('บันทึกภาพพร้อมพื้นหลังดาวเทียมไม่ได้ (ผู้ให้บริการไม่อนุญาต) — เลือกพื้นหลังแบบอื่นแล้วบันทึกอีกครั้ง');
-      }
+      cv.toBlob(function (blob) {
+        saveViaViewer(v.file + '.png', blob, 'รูป ' + v.file + '.png').then(function (handled) { if (!handled) exportPngFallback(v); });
+      }, 'image/png');
     }
+    function exportPngFallback(v) {
+      var cv = cards[v.id].cv, url = cv.toDataURL('image/png');
+      try {
+        var a = document.createElement('a'); a.href = url; a.download = v.file + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      } catch (e) { /* ดาวน์โหลดไม่ได้ ใช้ภาพแทน */ }
+      document.getElementById('imgTitle').textContent = v.title + ' (' + v.file + '.png)';
+      document.getElementById('imgOut').src = url;
+      document.getElementById('imgBox').hidden = false;
+    }
+    document.getElementById('imgClose').onclick = function () { document.getElementById('imgBox').hidden = true; };
 
     // ---------------- ส่งออก/นำเข้า ----------------
+    function dataMsg(t) { document.getElementById('dataMsg').textContent = t || ''; }
     document.getElementById('exportJson').onclick = function () {
-      var blob = new Blob([JSON.stringify(store, null, 2)], { type: 'application/json' });
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'banpong-agencies.json';
-      document.body.appendChild(a); a.click(); a.remove();
+      document.getElementById('dataText').value = JSON.stringify(store, null, 2);
+      dataMsg(''); document.getElementById('dataBox').hidden = false;
     };
-    document.getElementById('importBtn').onclick = function () { document.getElementById('importJson').click(); };
+    downloadsP.then(function (dl) { document.getElementById('dataSave').hidden = !dl; });
+    document.getElementById('dataSave').onclick = function () {
+      saveViaViewer('banpong-agencies.json', document.getElementById('dataText').value, 'ไฟล์ข้อมูล').then(function (ok) {
+        dataMsg(ok ? '' : 'บันทึกไฟล์ไม่ได้ในหน้านี้ ใช้ “คัดลอกข้อความ” แทน');
+      });
+    };
+    document.getElementById('dataClose').onclick = function () { document.getElementById('dataBox').hidden = true; };
+    document.getElementById('dataCopy').onclick = function () {
+      var ta = document.getElementById('dataText');
+      var done = function () { dataMsg('คัดลอกแล้ว'); };
+      try {
+        navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); dataMsg('เลือกข้อความแล้ว กด Ctrl+C (หรือคัดลอก) เพื่อคัดลอก'); });
+      } catch (e) { ta.select(); dataMsg('เลือกข้อความแล้ว กด Ctrl+C (หรือคัดลอก) เพื่อคัดลอก'); }
+    };
     document.getElementById('importJson').onchange = function (e) {
       var f = e.target.files[0]; if (!f) return;
-      f.text().then(function (t) {
-        var v = JSON.parse(t);
-        if (!v || !Array.isArray(v.agencies)) throw new Error('รูปแบบไฟล์ไม่ถูกต้อง');
-        store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active };
-        normalize(); save(); renderRows(); drawAll(); msg('นำเข้าข้อมูลแล้ว');
-      }).catch(function (err) { msg('นำเข้าไม่สำเร็จ: ' + err.message); });
+      f.text().then(function (t) { document.getElementById('dataText').value = t; dataMsg('อ่านไฟล์แล้ว กด “นำเข้า” เพื่อใช้ข้อมูลนี้'); });
       e.target.value = '';
+    };
+    document.getElementById('dataImport').onclick = function () {
+      try {
+        var v = JSON.parse(document.getElementById('dataText').value);
+        if (!v || !Array.isArray(v.agencies)) throw new Error('ไม่พบรายการหน่วยงานในข้อความ');
+        store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active };
+        normalize(); save(); renderRows(); drawAll();
+        dataMsg('นำเข้าข้อมูลแล้ว: ' + store.agencies.length + ' หน่วยงาน, ' + Object.keys(store.assign).length + ' ตำบล, ' + store.zones.length + ' กรอบ');
+      } catch (err) { dataMsg('นำเข้าไม่สำเร็จ: ' + err.message + ' — ตรวจว่าวางข้อความที่คัดลอกจากปุ่มส่งออกครบทั้งหมด'); }
     };
     document.getElementById('addAgency').onclick = function () { addAgency(); renderRows(); save(); };
     document.getElementById('bg').onchange = function () { msg(''); drawAll(); };
 
-    load(); renderRows(); buildCards(); drawAll();
+    load(); renderRows(); buildCards();
+    // รอฟอนต์ Sarabun ก่อนวาดลงภาพ (ไม่เกิน 3 วินาที) แล้ววาดใหม่เมื่อฟอนต์มาถึง
+    drawAll();
+    if (document.fonts && document.fonts.load) {
+      Promise.race([document.fonts.load('700 20px Sarabun'), new Promise(function (r) { setTimeout(r, 3000); })]).then(drawAll);
+    }
     // สำหรับทดสอบ
     window.tambonMap = {
       store: function () { return store; }, views: VIEWS, draw: drawAll,
