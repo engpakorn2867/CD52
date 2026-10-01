@@ -218,6 +218,18 @@
       pathFeature(f); ctx.fillStyle = rgba(a.color, 0.32); ctx.fill('evenodd');
     });
     if (street) drawBasemap(ctx, cfg.basemap, P, s, mapX, mapY, mapW, mapH);
+    // คาดการณ์น้ำท่วม: ภาพความลึกรายเซลล์ (cfg.flood.image = canvas ขนาดตาราง, cfg.flood.grid = {z,x0,y0,w,h})
+    if (cfg.flood && cfg.flood.image) {
+      var fg = cfg.flood.grid, fn = 256 * Math.pow(2, fg.z);
+      ctx.save(); ctx.globalAlpha = 0.85; ctx.imageSmoothingEnabled = true;
+      // แสดงเฉพาะในเขต อ.บ้านโป่ง (ตารางคำนวณครอบเฉพาะอำเภอ)
+      ctx.beginPath();
+      bp.forEach(function (f) { f.geometry.coordinates.forEach(function (poly) { poly.forEach(function (r) {
+        r.forEach(function (c, i) { var p = P(c[0], c[1]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath(); }); }); });
+      ctx.clip('evenodd');
+      ctx.drawImage(cfg.flood.image, ox + fg.x0 / fn * s, oy + fg.y0 / fn * s, fg.w / fn * s, fg.h / fn * s);
+      ctx.restore();
+    }
 
     // แม่น้ำ: พิกเซลแหล่งน้ำ (WorldCover) ในแนว ±400 ม. จากเส้นกึ่งกลาง
     var riverPts = densify(cfg.river, 0.1);
@@ -537,8 +549,12 @@
     var usedIds = (cfg.agencies || []).filter(function (a) { return cfg._used && cfg._used[a.id]; });
     var legendItems = [[COLORS.water, 'แม่น้ำแม่กลอง', 'box']];
     if (!plain) legendItems.push([COLORS.red.fill, 'ตำบลติด/แม่น้ำไหลผ่าน', 'box'], [COLORS.yellow.fill, 'ตำบลติดตำบลริมแม่น้ำ (เฝ้าระวัง)', 'box'], [COLORS.gray.fill, 'ตำบลอื่นใน อ.บ้านโป่ง', 'box']);
+    if (cfg.flood && cfg.flood.res) {
+      legendItems.push(['rgb(158,202,225)', 'น้ำท่วมลึก < 0.5 ม.', 'box'], ['rgb(66,146,198)', 'ลึก 0.5–1 ม.', 'box'], ['rgb(33,102,172)', 'ลึก 1–2 ม.', 'box'], ['rgb(8,48,107)', 'ลึก > 2 ม.', 'box']);
+      if (cfg.flood.riskM) legendItems.push(['rgba(255,152,0,0.6)', 'เสี่ยงท่วมถ้าน้ำขึ้นอีก ' + cfg.flood.riskM + ' ม.', 'box']);
+    }
     if (teams.some(function (t) { return t.t.base; })) legendItems.push(['#37474f', 'จุดตั้งชุดปฏิบัติการ (หมายเลขตามรายการ)', 'pin']);
-    var legendTop = y + h - 38 - legendItems.length * 26;
+    var legendCols = legendItems.length > 6 ? 2 : 1, legendTop = y + h - 38 - Math.ceil(legendItems.length / legendCols) * 26;
     var hidden = 0;
     function fits(n) { if (cy + n < legendTop - 24) return true; hidden++; return false; }
     function heading(t, col) { if (!fits(30)) return; ctx.font = '700 20px ' + font; ctx.fillStyle = col || '#1a1a1a'; ctx.fillText(t, lx, cy); cy += 28; }
@@ -566,6 +582,39 @@
         });
       }
       cy += 14;
+    }
+
+    // คาดการณ์น้ำท่วม
+    if (cfg.flood && cfg.flood.res) floodSection();
+    function floodSection() {
+      var fl = cfg.flood, r = fl.res, names = cfg.focus || null;
+      ctx.font = '700 20px ' + font; ctx.fillStyle = '#0d47a1';
+      ctx.fillText('คาดการณ์น้ำท่วม · K.55A ' + fl.H.toFixed(2) + ' ม.รทก.', lx, cy); cy += 22;
+      ctx.font = '400 14px ' + font; ctx.fillStyle = '#444';
+      cy = wrap(ctx, 'ตลิ่ง ' + r.bank.toFixed(2) + ' ม. · ล้นตลิ่ง ' + r.excess.toFixed(2) + ' ม. · Q ' + Math.round(fl.Q).toLocaleString('en-US') +
+        ' ลบ.ม./วินาที' + (fl.note ? ' · ' + fl.note : ''), lx, cy, tw, 18);
+      var rows = r.tambons.filter(function (t) { return names ? names.indexOf(t.th) >= 0 : t.rai >= 1; })
+        .sort(function (a, b) { return b.rai - a.rai; });
+      var sum = names ? rows.reduce(function (a, t) { return { rai: a.rai + t.rai, damage: a.damage + t.damage }; }, { rai: 0, damage: 0 }) : r.total;
+      ctx.font = '700 16px ' + font; ctx.fillStyle = '#b71c1c';
+      cy = wrap(ctx, 'ท่วม ' + fmtRai(sum.rai) + ' ไร่ (' + (sum.rai * 1600 / 1e6).toFixed(1) + ' ตร.กม.) · เสียหาย ~' + fmtBaht(sum.damage), lx, cy + 2, tw, 20);
+      cy += 4;
+      var maxRows = names ? rows.length : 8;
+      rows.slice(0, maxRows).forEach(function (t) {
+        if (!fits(22)) return;
+        var i = r.tambons.indexOf(t), on = r.onset && r.onset[i];
+        ctx.font = '600 15px ' + font; ctx.fillStyle = '#222'; ctx.fillText('ต.' + t.th, lx, cy);
+        ctx.font = '400 13px ' + font; ctx.fillStyle = '#444'; ctx.textAlign = 'right';
+        ctx.fillText(t.rai >= 1 ? fmtRai(t.rai) + ' ไร่ · ลึก ~' + t.meanD.toFixed(1) + ' ม. · ' + fmtBaht(t.damage)
+          : 'ยังไม่ท่วม' + (on ? ' (เริ่มท่วม ~' + on.toFixed(2) + ' ม.)' : ''), x + w - 20, cy);
+        ctx.textAlign = 'left'; cy += 21;
+        if (names && on && on > fl.H && t.rai >= 1 && fits(18)) {
+          ctx.font = '400 13px ' + font; ctx.fillStyle = '#e65100';
+          ctx.fillText('จะท่วมเป็นวงกว้างเมื่อระดับน้ำถึง ~' + on.toFixed(2) + ' ม. (อีก ' + (on - fl.H).toFixed(2) + ' ม.)', lx + 12, cy); cy += 19;
+        }
+      });
+      if (rows.length > maxRows && fits(20)) { ctx.font = '400 13px ' + font; ctx.fillStyle = '#666'; ctx.fillText('และอีก ' + (rows.length - maxRows) + ' ตำบล', lx, cy); cy += 20; }
+      cy += 10;
     }
 
     // หน่วยงานรับผิดชอบ
@@ -608,7 +657,7 @@
     }
 
     // ไม่มีหน่วยงาน/ชุดปฏิบัติการ: สรุปตำบลตามแม่น้ำ (ภาพรวม) หรือคำแนะนำ
-    if (!usedIds.length && !teams.length) {
+    if (!usedIds.length && !teams.length && !(cfg.flood && cfg.flood.res)) {
       if (!cfg.focus && !plain) {
         var red = bp.filter(function (f) { return f.properties.cls === 'red'; }).sort(function (a, b) { return b.properties.riverKm - a.properties.riverKm; });
         var yel = bp.filter(function (f) { return f.properties.cls === 'yellow'; });
@@ -642,13 +691,20 @@
     var ly = legendTop;
     ctx.strokeStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(lx, ly - 16); ctx.lineTo(x + w - 22, ly - 16); ctx.stroke();
     ctx.font = '700 15px ' + font; ctx.fillStyle = '#333'; ctx.fillText('คำอธิบายสัญลักษณ์', lx, ly + 4); ly += 28;
-    legendItems.forEach(function (it) {
-      if (it[2] === 'pin') { ctx.beginPath(); ctx.arc(lx + 15, ly - 5, 10, 0, Math.PI * 2); ctx.fillStyle = it[0]; ctx.fill(); }
-      else { ctx.fillStyle = it[0]; roundRect(ctx, lx, ly - 15, 30, 20, 4); ctx.fill(); ctx.strokeStyle = '#888'; ctx.stroke(); }
-      ctx.fillStyle = '#333'; ctx.font = '400 14px ' + font; ctx.fillText(it[1], lx + 42, ly); ly += 26;
+    var colW = tw / legendCols, rowsPer = Math.ceil(legendItems.length / legendCols);
+    legendItems.forEach(function (it, i) {
+      var ix = lx + Math.floor(i / rowsPer) * colW, iy = ly + (i % rowsPer) * 26;
+      if (it[2] === 'pin') { ctx.beginPath(); ctx.arc(ix + 15, iy - 5, 10, 0, Math.PI * 2); ctx.fillStyle = it[0]; ctx.fill(); }
+      else { ctx.fillStyle = it[0]; roundRect(ctx, ix, iy - 15, 30, 20, 4); ctx.fill(); ctx.strokeStyle = '#888'; ctx.stroke(); }
+      ctx.fillStyle = '#333';
+      for (var fz = 14; fz > 10; fz--) { ctx.font = '400 ' + fz + 'px ' + font; if (ctx.measureText(it[1]).width <= colW - 46) break; }
+      ctx.fillText(it[1], ix + 38, iy);
     });
     ctx.restore();
   }
+
+  function fmtRai(v) { return Math.round(v).toLocaleString('en-US'); }
+  function fmtBaht(v) { return v >= 1e9 ? (v / 1e9).toFixed(2) + ' พันล้านบาท' : v >= 1e6 ? (v / 1e6).toFixed(1) + ' ล้านบาท' : Math.round(v).toLocaleString('en-US') + ' บาท'; }
 
   function wrap(ctx, text, x, y, maxW, lh) {
     var words = text.split(' '), line = '';
