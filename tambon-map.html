@@ -34,7 +34,8 @@
   <div class="bar">
     <label>พื้นหลัง
       <select id="bg">
-        <option value="none">แบบเรียบ (เหมือนแผนที่เขต)</option>
+        <option value="street">แผนที่ถนน (แบบแผนที่เขต)</option>
+        <option value="none">แบบเรียบ</option>
         <option value="sat">ภาพดาวเทียม (Esri)</option>
       </select>
     </label>
@@ -54,6 +55,7 @@
   <script src="data/banpong-tambons.js"></script>
   <script src="data/maeklong-river.js"></script>
   <script src="data/landcover.js"></script>
+  <script src="data/banpong-basemap.js"></script>
   <script src="js/tambon-map.js"></script>
   <script>
   (function () {
@@ -61,6 +63,7 @@
     var features = window.BANPONG_TAMBONS.features, river = window.MAEKLONG_RIVER;
     TM.classify(features, river);
     var NOTE = 'ที่มา: ขอบเขตตำบล OpenGISData-Thailand (แบบย่อ ไม่ใช่แนวเขตทางกฎหมาย) · แม่น้ำ: ESA WorldCover 2021 (CC BY 4.0) + แนวร่องน้ำจาก DEM · จัดทำเพื่อประกอบการเฝ้าระวังอุทกภัย';
+    var BASE_NOTE = ' · แผนที่ถนน/แหล่งน้ำ: Overture Maps, © OpenStreetMap contributors (ODbL)';
     var VIEWS = [
       { id: 'cvAll', focus: null, title: 'ตำบลที่ได้รับผลกระทบจากแม่น้ำแม่กลอง อ.บ้านโป่ง จ.ราชบุรี',
         subtitle: 'แบ่งตามที่ตั้งเทียบแม่น้ำแม่กลอง: ติด/แม่น้ำไหลผ่าน (แดง) · ติดกับตำบลริมน้ำ (เหลือง) · อื่นๆ (เทา)' },
@@ -108,14 +111,15 @@
 
     var lcPromise = loadLandcover();
     function draw() {
-      var useSat = document.getElementById('bg').value === 'sat';
+      var bgv = document.getElementById('bg').value, useSat = bgv === 'sat';
       lcPromise.then(function (lc) {
         VIEWS.forEach(function (v) {
           var cv = document.getElementById(v.id);
           var tilesP = useSat ? loadTiles(v, cv) : Promise.resolve([]);
           tilesP.then(function (tiles) {
             TM.render({ canvas: cv, features: features, river: river, landcover: lc, focus: v.focus,
-              title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE });
+              title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
+              basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null });
             if (useSat && !tiles.length) document.getElementById('msg').textContent = 'โหลดภาพดาวเทียมไม่ได้ — แสดงแบบเรียบแทน';
           });
         });
