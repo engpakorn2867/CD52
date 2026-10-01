@@ -7,20 +7,20 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap">
   <style>
     /* เครื่องมือแผนที่: แผงข้อมูลด้านบน การ์ดแผนที่เรียงลง ภาพแผนที่สีขาวคงที่ (ใช้พิมพ์/ส่งต่อ) */
-    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; --bad: #c62828; --shade: rgba(10,16,24,0.72); }
+    :root { --bg: #eef0f2; --panel: #fff; --text: #1a1a1a; --muted: #5d6b7a; --line: #d6dbe0; --accent: #1f5fbf; --bad: #c62828; --shade: rgba(10,16,24,0.72); --chip: #f1f4f7; }
     @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); color-scheme: dark; }
+      :root:not([data-theme="light"]) { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); --chip: #222c38; color-scheme: dark; }
     }
-    :root[data-theme="dark"] { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); color-scheme: dark; }
+    :root[data-theme="dark"] { --bg: #121820; --panel: #1a222c; --text: #e6edf5; --muted: #9aa8b7; --line: #2c3845; --accent: #6aa5ff; --bad: #ef6b6b; --shade: rgba(0,0,0,0.8); --chip: #222c38; color-scheme: dark; }
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
     body { margin: 0; background: var(--bg); color: var(--text);
       font-family: "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif; }
     header { padding: 14px 16px 4px; }
-    h1 { font-size: 20px; margin: 0 0 4px; }
+    h1 { font-size: 20px; margin: 0 0 4px; text-wrap: balance; }
     h2 { font-size: 16px; margin: 0; }
     p { margin: 4px 0; color: var(--muted); font-size: 14px; }
-    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 16px; font-size: 14px; }
     button, select, input { font: inherit; font-size: 14px; border-radius: 6px; border: 1px solid var(--line);
       background: var(--panel); color: var(--text); }
     button, select { padding: 6px 10px; cursor: pointer; }
@@ -30,10 +30,10 @@
     button.danger { color: var(--bad); }
     .card { margin: 8px 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
     .card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 2px 4px 8px; }
-    .card-head h2 { flex: 1 1 220px; }
+    .card-head h2 { flex: 1 1 220px; min-width: 0; }
     .tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 4px 0; font-size: 13px; color: var(--muted); }
     canvas { width: 100%; height: auto; display: block; border-radius: 6px; touch-action: manipulation; }
-    canvas.assign, canvas.erase { cursor: pointer; }
+    canvas.assign, canvas.erase, canvas.team { cursor: pointer; }
     canvas.draw { cursor: crosshair; }
     .msg { font-size: 13px; color: var(--muted); padding: 0 16px; min-height: 18px; }
     a { color: var(--accent); }
@@ -41,11 +41,11 @@
     table.ag th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px; border-bottom: 1px solid var(--line); }
     table.ag td { padding: 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
     table.ag input[type=text], table.ag input[type=tel] { width: 100%; min-width: 90px; }
-    table.ag input[type=color] { width: 40px; height: 32px; padding: 2px; }
+    input[type=color] { width: 40px; height: 32px; padding: 2px; }
     .wrap-table { overflow-x: auto; }
     .hint { font-size: 13px; color: var(--muted); margin: 6px 4px; }
     .assigns { font-size: 13px; color: var(--muted); margin: 6px 4px 0; }
-    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, label.chip:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
     .overlay { position: fixed; inset: 0; background: var(--shade); z-index: 50; display: flex; align-items: center; justify-content: center;
       padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
     .overlay .box { background: var(--panel); color: var(--text); border-radius: 10px; padding: 12px; max-width: 1100px; width: 100%;
@@ -55,12 +55,29 @@
       border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
     .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .zone-name { min-width: 0; width: 220px; max-width: 100%; }
+    /* ปุ่มเลือกตำบล */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px; }
+    label.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--chip); font-size: 13px; cursor: pointer; user-select: none; }
+    label.chip input { margin: 0; }
+    label.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    label.chip.red { box-shadow: inset 3px 0 0 #e53935; }
+    .count { font-size: 13px; color: var(--muted); }
+    /* ชุดปฏิบัติการ */
+    .teams { display: grid; gap: 10px; }
+    .team { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
+    .team-grid label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); min-width: 0; }
+    .team-grid input, .team-grid select { width: 100%; min-width: 0; color: var(--text); }
+    .team-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .badge { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px;
+      font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
   <header>
-    <h1>แผนที่ตำบล อ.บ้านโป่ง และหน่วยงานรับผิดชอบ</h1>
-    <p>กำหนดหน่วยงานรับผิดชอบด้านล่าง แล้วใช้เครื่องมือ “คลิกตำบล” หรือ “วาดกรอบ” บนแผนที่แต่ละภาพ · กด “บันทึกเป็นรูป” เพื่อดาวน์โหลด PNG</p>
+    <h1>แผนที่ตำบล อ.บ้านโป่ง · หน่วยงานรับผิดชอบ · ชุดปฏิบัติการ</h1>
+    <p>1) กรอกหน่วยงานและชุดปฏิบัติการ 2) เลือกตำบลที่จะทำแผนที่ (1–5 ตำบลต่อภาพ) 3) ใช้เครื่องมือใต้แผนที่ 4) กด “บันทึกเป็นรูป”</p>
   </header>
   <div class="bar">
     <label>พื้นหลัง
@@ -69,13 +86,14 @@
         <option value="none">แบบเรียบ</option>
       </select>
     </label>
+    <label class="chip"><input type="checkbox" id="separate" checked> แยกส่วนตำบล (เว้นขอบขาว ไม่ให้สีติดกัน)</label>
+    <button type="button" id="exportJson">ส่งออก / นำเข้าข้อมูล</button>
   </div>
 
   <div class="card">
     <div class="card-head">
       <h2>หน่วยงานรับผิดชอบ</h2>
       <button type="button" id="addAgency">+ เพิ่มหน่วยงาน</button>
-      <button type="button" id="exportJson">ส่งออก / นำเข้าข้อมูล</button>
     </div>
     <div class="wrap-table">
       <table class="ag">
@@ -84,11 +102,22 @@
       </table>
     </div>
     <p class="hint">เลือก “ใช้” ที่หน่วยงาน แล้ว: <b>คลิกตำบล</b> = กำหนด/ยกเลิกหน่วยงานให้ทั้งตำบล · <b>วาดกรอบ</b> = คลิกทีละจุดรอบพื้นที่ แล้วกด “เสร็จ” (หรือดับเบิลคลิก) ·
-      <b>ลบกรอบ</b> = คลิกในกรอบที่ต้องการลบ · ข้อมูลบันทึกในเบราว์เซอร์นี้อัตโนมัติ ใช้ “ส่งออก / นำเข้าข้อมูล” เพื่อเก็บสำรองหรือส่งต่อให้เครื่องอื่น</p>
+      <b>ลบกรอบ</b> = คลิกในกรอบที่ต้องการลบ</p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>ชุดปฏิบัติการ</h2>
+      <button type="button" id="addTeam">+ เพิ่มชุดปฏิบัติการ</button>
+    </div>
+    <div class="teams" id="teamList"></div>
+    <p class="hint">เลือก “วางจุด” ที่ชุดปฏิบัติการ แล้วใช้เครื่องมือ <b>วางจุดชุดปฏิบัติการ</b> ใต้แผนที่ คลิกตำแหน่งจุดตั้ง/ฐานปฏิบัติการ · ติ๊กตำบลที่ชุดรับผิดชอบเพื่อให้แสดงในแผนที่ของตำบลนั้น</p>
   </div>
   <div id="msg" class="msg" role="status"></div>
 
   <div id="views"></div>
+  <div class="bar"><button type="button" class="primary" id="addView">+ เพิ่มแผนที่เจาะจงตำบล</button>
+    <span class="count">แต่ละภาพเลือกได้ 1–5 ตำบล</span></div>
 
   <div class="overlay" id="imgBox" hidden>
     <div class="box" role="dialog" aria-label="ภาพสำหรับบันทึก">
@@ -99,10 +128,10 @@
   </div>
 
   <div class="overlay" id="dataBox" hidden>
-    <div class="box" role="dialog" aria-label="ส่งออกและนำเข้าข้อมูลหน่วยงาน">
-      <div class="row"><b>ส่งออก / นำเข้าข้อมูลหน่วยงาน</b><span style="flex:1"></span><button type="button" id="dataClose">ปิด</button></div>
+    <div class="box" role="dialog" aria-label="ส่งออกและนำเข้าข้อมูล">
+      <div class="row"><b>ส่งออก / นำเข้าข้อมูล (หน่วยงาน ชุดปฏิบัติการ แผนที่)</b><span style="flex:1"></span><button type="button" id="dataClose">ปิด</button></div>
       <p>ส่งออก: คัดลอกข้อความด้านล่างเก็บไว้ (เช่น วางในไลน์หรือโน้ต) · นำเข้า: วางข้อความที่เคยคัดลอก หรือเลือกไฟล์ .json แล้วกด “นำเข้า”</p>
-      <textarea id="dataText" spellcheck="false" aria-label="ข้อมูลหน่วยงาน (JSON)"></textarea>
+      <textarea id="dataText" spellcheck="false" aria-label="ข้อมูล (JSON)"></textarea>
       <div class="row">
         <button type="button" id="dataCopy">คัดลอกข้อความ</button>
         <button type="button" id="dataSave" hidden>บันทึกเป็นไฟล์ .json</button>
@@ -125,38 +154,65 @@
     var TM = window.TambonMap, LC = window.LANDCOVER;
     var features = window.BANPONG_TAMBONS.features, river = window.MAEKLONG_RIVER;
     TM.classify(features, river);
+    var TAMBONS = features.filter(function (f) { return f.properties.role === 'banpong'; })
+      .sort(function (a, b) { return a.properties.th.localeCompare(b.properties.th, 'th'); });
+    var EN = {}; TAMBONS.forEach(function (f) { EN[f.properties.th] = f.properties.en; });
+    var MAX_TAMBONS = 5;
     var NOTE = 'ที่มา: ขอบเขตตำบล OpenGISData-Thailand (แบบย่อ ไม่ใช่แนวเขตทางกฎหมาย) · แม่น้ำ: ESA WorldCover 2021 (CC BY 4.0) + แนวร่องน้ำจาก DEM';
     var BASE_NOTE = ' · แผนที่ถนน/แหล่งน้ำ: Overture Maps, © OpenStreetMap contributors (ODbL)';
-    var VIEWS = [
-      { id: 'all', focus: null, mode: 'river', file: 'banpong-tambon',
-        title: 'ตำบลและหน่วยงานรับผิดชอบ อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' },
-      { id: 'banmuang', focus: ['บ้านม่วง'], mode: 'plain', file: 'ban-muang',
-        title: 'ต.บ้านม่วง อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'แนวแม่น้ำแม่กลองและพื้นที่รับผิดชอบ' },
-      { id: 'khungphayom', focus: ['คุ้งพยอม'], mode: 'plain', file: 'khung-phayom',
-        title: 'ต.คุ้งพยอม อ.บ้านโป่ง จ.ราชบุรี', subtitle: 'แนวแม่น้ำแม่กลองและพื้นที่รับผิดชอบ' }
-    ];
 
-    // ---------------- ข้อมูลหน่วยงาน (บันทึกในเบราว์เซอร์) ----------------
+    // ---------------- ข้อมูล (บันทึกในเบราว์เซอร์) ----------------
     var KEY = 'banpong-tambon-agencies-v1';
     var PALETTE = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00897b', '#6d4c41', '#d81b60'];
-    var store = { agencies: [], assign: {}, zones: [], active: null };
+    var store = { agencies: [], assign: {}, zones: [], active: null, teams: [], activeTeam: null, views: null };
     function load() {
       try { var v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (v && v.agencies) store = Object.assign(store, v); } catch (e) { /* ไม่มีที่เก็บ */ }
       normalize();
     }
     function normalize() {
+      if (!Array.isArray(store.agencies)) store.agencies = [];
+      if (!Array.isArray(store.teams)) store.teams = [];
+      if (!Array.isArray(store.zones)) store.zones = [];
+      if (!store.assign || typeof store.assign !== 'object') store.assign = {};
       if (!store.agencies.length) addAgency();
-      if (!store.active || !store.agencies.some(function (a) { return a.id === store.active; })) store.active = store.agencies[0].id;
+      if (!store.agencies.some(function (a) { return a.id === store.active; })) store.active = store.agencies[0].id;
+      if (!store.teams.some(function (t) { return t.id === store.activeTeam; })) store.activeTeam = store.teams.length ? store.teams[0].id : null;
+      if (!Array.isArray(store.views) || !store.views.length) {
+        store.views = [{ id: 'v-banmuang', tambons: ['บ้านม่วง'], mode: 'plain' }, { id: 'v-khungphayom', tambons: ['คุ้งพยอม'], mode: 'plain' }];
+      }
+      store.views.forEach(function (v) { v.tambons = (v.tambons || []).filter(function (t) { return EN[t]; }).slice(0, MAX_TAMBONS); });
+      if (typeof store.separate !== 'boolean') store.separate = true;
+      if (!store.allMode) store.allMode = 'river';
     }
     function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* ไม่มีที่เก็บ */ } }
-    function uid() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    function uid(p) { return (p || 'a') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
     function addAgency() {
-      var a = { id: uid(), color: PALETTE[store.agencies.length % PALETTE.length], name: 'หน่วยงานที่ ' + (store.agencies.length + 1), person: '', phone: '', note: '' };
+      var a = { id: uid('a'), color: PALETTE[store.agencies.length % PALETTE.length], name: 'หน่วยงานที่ ' + (store.agencies.length + 1), person: '', phone: '', note: '' };
       store.agencies.push(a); store.active = a.id;
       return a;
     }
+    function addTeam() {
+      var t = { id: uid('t'), name: 'ชุดปฏิบัติการที่ ' + (store.teams.length + 1), agency: store.active, leader: '', phone: '',
+        staff: '', equipment: '', tambons: [], base: null, note: '' };
+      store.teams.push(t); store.activeTeam = t.id;
+      return t;
+    }
     function msg(t) { document.getElementById('msg').textContent = t || ''; }
+    function agencyById(id) { return store.agencies.filter(function (a) { return a.id === id; })[0]; }
+    var redrawTimer = null;
+    function changed() { save(); clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 150); }
+    function twoStepDelete(btn, onConfirm) {
+      btn.onclick = function () {
+        if (!btn.dataset.armed) {
+          btn.dataset.armed = '1'; var old = btn.textContent; btn.textContent = 'กดอีกครั้งเพื่อลบ';
+          setTimeout(function () { delete btn.dataset.armed; btn.textContent = old; }, 4000);
+          return;
+        }
+        onConfirm();
+      };
+    }
 
+    // ---------------- หน่วยงาน ----------------
     function renderRows() {
       var tb = document.getElementById('agencyRows');
       tb.textContent = '';
@@ -167,68 +223,182 @@
         r.title = 'ใช้หน่วยงานนี้กับเครื่องมือคลิกตำบล/วาดกรอบ';
         r.onchange = function () { store.active = a.id; save(); };
         var c = cell(document.createElement('input')); c.type = 'color'; c.value = a.color; c.title = 'สีไฮไลต์';
-        c.oninput = function () { a.color = c.value; changed(); };
+        c.oninput = function () { a.color = c.value; changed(); renderTeams(); };
         [['name', 'text', 'ชื่อหน่วยงาน'], ['person', 'text', 'ชื่อผู้รับผิดชอบ/ตำแหน่ง'], ['phone', 'tel', '0xx-xxx-xxxx'], ['note', 'text', 'หมายเหตุ']].forEach(function (f) {
           var i = cell(document.createElement('input')); i.type = f[1]; i.placeholder = f[2]; i.value = a[f[0]] || '';
           i.dataset.field = f[0];
           if (f[0] === 'phone') i.inputMode = 'tel';
-          i.oninput = function () { a[f[0]] = i.value; changed(); };
+          i.oninput = function () { a[f[0]] = i.value; changed(); if (f[0] === 'name') renderTeamAgencyOptions(); };
         });
         var del = cell(document.createElement('button')); del.type = 'button'; del.className = 'danger'; del.textContent = 'ลบ';
-        del.onclick = function () {
-          // ยืนยันสองขั้น (กล่อง confirm ใช้ไม่ได้ในบางที่)
-          if (!del.dataset.armed) {
-            del.dataset.armed = '1'; del.textContent = 'กดอีกครั้งเพื่อลบ';
-            setTimeout(function () { delete del.dataset.armed; del.textContent = 'ลบ'; }, 4000);
-            return;
-          }
+        twoStepDelete(del, function () {
           store.agencies = store.agencies.filter(function (x) { return x !== a; });
           Object.keys(store.assign).forEach(function (t) { if (store.assign[t] === a.id) delete store.assign[t]; });
           store.zones = store.zones.filter(function (z) { return z.agency !== a.id; });
-          normalize(); renderRows(); changed();
-        };
+          store.teams.forEach(function (t) { if (t.agency === a.id) t.agency = null; });
+          normalize(); renderRows(); renderTeams(); changed();
+        });
         tb.appendChild(tr);
       });
     }
-    var redrawTimer = null;
-    function changed() { save(); clearTimeout(redrawTimer); redrawTimer = setTimeout(drawAll, 150); }
+
+    // ---------------- ชุดปฏิบัติการ ----------------
+    function tambonChips(selected, onToggle, max) {
+      var box = document.createElement('div'); box.className = 'chips';
+      TAMBONS.forEach(function (f) {
+        var th = f.properties.th;
+        var lab = document.createElement('label'); lab.className = 'chip' + (f.properties.cls === 'red' ? ' red' : '');
+        lab.title = f.properties.cls === 'red' ? 'ตำบลติด/แม่น้ำแม่กลองไหลผ่าน' : '';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selected.indexOf(th) >= 0;
+        lab.classList.toggle('on', cb.checked);
+        cb.onchange = function () {
+          if (cb.checked && max && selected.length >= max) { cb.checked = false; msg('เลือกได้สูงสุด ' + max + ' ตำบลต่อภาพ'); return; }
+          if (cb.checked) selected.push(th); else selected.splice(selected.indexOf(th), 1);
+          lab.classList.toggle('on', cb.checked);
+          onToggle();
+        };
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(th));
+        box.appendChild(lab);
+      });
+      return box;
+    }
+    var teamAgencySelects = [];
+    function renderTeamAgencyOptions() {
+      teamAgencySelects.forEach(function (it) {
+        var sel = it.sel, t = it.t;
+        sel.textContent = '';
+        var none = document.createElement('option'); none.value = ''; none.textContent = '(ไม่ระบุ)'; sel.appendChild(none);
+        store.agencies.forEach(function (a) { var o = document.createElement('option'); o.value = a.id; o.textContent = a.name || 'หน่วยงาน'; sel.appendChild(o); });
+        sel.value = t.agency || '';
+      });
+    }
+    function renderTeams() {
+      var host = document.getElementById('teamList');
+      host.textContent = ''; teamAgencySelects = [];
+      if (!store.teams.length) {
+        var p = document.createElement('p'); p.className = 'hint';
+        p.textContent = 'ยังไม่มีชุดปฏิบัติการ — กด “+ เพิ่มชุดปฏิบัติการ” เพื่อกรอก ชื่อชุด หัวหน้าชุด เบอร์โทร กำลังพล ยานพาหนะ/อุปกรณ์ และพื้นที่รับผิดชอบ';
+        host.appendChild(p); return;
+      }
+      store.teams.forEach(function (t, i) {
+        var box = document.createElement('div'); box.className = 'team';
+        var head = document.createElement('div'); head.className = 'team-head';
+        var a = agencyById(t.agency);
+        var badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = String(i + 1);
+        badge.style.background = (a && a.color) || '#37474f';
+        head.appendChild(badge);
+        var name = document.createElement('input'); name.type = 'text'; name.value = t.name; name.placeholder = 'ชื่อชุดปฏิบัติการ';
+        name.setAttribute('aria-label', 'ชื่อชุดปฏิบัติการ'); name.style.flex = '1 1 200px'; name.style.minWidth = '0'; name.dataset.field = 'name';
+        name.oninput = function () { t.name = name.value; changed(); };
+        head.appendChild(name);
+        var use = document.createElement('label'); use.className = 'chip';
+        var r = document.createElement('input'); r.type = 'radio'; r.name = 'activeTeam'; r.checked = t.id === store.activeTeam;
+        r.onchange = function () { store.activeTeam = t.id; save(); };
+        use.appendChild(r); use.appendChild(document.createTextNode('วางจุด'));
+        head.appendChild(use);
+        var st = document.createElement('span'); st.className = 'count';
+        st.textContent = t.base ? 'จุดตั้ง: ' + t.base[1].toFixed(5) + ', ' + t.base[0].toFixed(5) : 'ยังไม่ได้วางจุดตั้ง';
+        head.appendChild(st);
+        if (t.base) {
+          var clr = document.createElement('button'); clr.type = 'button'; clr.textContent = 'ลบจุดตั้ง';
+          clr.onclick = function () { t.base = null; renderTeams(); changed(); };
+          head.appendChild(clr);
+        }
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'ลบชุด';
+        twoStepDelete(del, function () { store.teams = store.teams.filter(function (x) { return x !== t; }); normalize(); renderTeams(); changed(); });
+        head.appendChild(del);
+        box.appendChild(head);
+
+        var grid = document.createElement('div'); grid.className = 'team-grid';
+        function field(label, key, type, ph) {
+          var lab = document.createElement('label'); lab.textContent = label;
+          var inp = document.createElement('input'); inp.type = type; inp.placeholder = ph || ''; inp.value = t[key] || ''; inp.dataset.field = key;
+          if (type === 'tel') inp.inputMode = 'tel';
+          if (type === 'number') { inp.min = '0'; inp.inputMode = 'numeric'; }
+          inp.oninput = function () { t[key] = inp.value; changed(); };
+          lab.appendChild(inp); grid.appendChild(lab);
+        }
+        var labA = document.createElement('label'); labA.textContent = 'หน่วยงานต้นสังกัด';
+        var sel = document.createElement('select'); sel.dataset.field = 'agency';
+        sel.onchange = function () { t.agency = sel.value || null; renderTeams(); changed(); };
+        labA.appendChild(sel); grid.appendChild(labA);
+        teamAgencySelects.push({ sel: sel, t: t });
+        field('หัวหน้าชุด', 'leader', 'text', 'ยศ ชื่อ-สกุล');
+        field('เบอร์โทร', 'phone', 'tel', '0xx-xxx-xxxx');
+        field('กำลังพล (นาย)', 'staff', 'number', '0');
+        field('ยานพาหนะ/อุปกรณ์', 'equipment', 'text', 'เช่น เรือท้องแบน 2 ลำ, รถยกสูง 1 คัน');
+        field('หมายเหตุ', 'note', 'text', 'เช่น ช่วงเวลาปฏิบัติงาน');
+        box.appendChild(grid);
+        var tl = document.createElement('div'); tl.className = 'count'; tl.textContent = 'ตำบลที่รับผิดชอบ:';
+        box.appendChild(tl);
+        box.appendChild(tambonChips(t.tambons, function () { changed(); }));
+        host.appendChild(box);
+      });
+      renderTeamAgencyOptions();
+    }
 
     // ---------------- การ์ดแผนที่ ----------------
+    // ภาพรวมทั้งอำเภอ (คงที่) + แผนที่เจาะจงตำบลที่ผู้ใช้เพิ่ม/ลบได้ (1–5 ตำบลต่อภาพ)
+    var ALL = { id: 'all', fixed: true, tambons: null };
     var cards = {};
+    function viewTitle(v) {
+      if (!v.tambons) return 'ตำบล หน่วยงาน และชุดปฏิบัติการ อ.บ้านโป่ง จ.ราชบุรี';
+      if (!v.tambons.length) return 'แผนที่เจาะจงตำบล (ยังไม่ได้เลือกตำบล)';
+      var names = v.tambons.map(function (t) { return 'ต.' + t; });
+      var joined = names.length === 1 ? names[0] : names.slice(0, -1).join(' ') + ' และ ' + names[names.length - 1];
+      return joined + ' อ.บ้านโป่ง จ.ราชบุรี';
+    }
+    function viewFile(v) {
+      if (!v.tambons) return 'banpong-tambon';
+      return v.tambons.map(function (t) { return (EN[t] || 'tambon').toLowerCase().replace(/\s+/g, '-'); }).join('_') || 'tambon';
+    }
+    function allViews() { return [ALL].concat(store.views); }
     function buildCards() {
       var host = document.getElementById('views');
-      VIEWS.forEach(function (v) {
+      host.textContent = ''; cards = {};
+      allViews().forEach(function (v) {
         var card = document.createElement('div'); card.className = 'card';
         var head = document.createElement('div'); head.className = 'card-head';
-        var h = document.createElement('h2'); h.textContent = v.title; head.appendChild(h);
+        var h = document.createElement('h2'); h.textContent = viewTitle(v); head.appendChild(h);
         var mode = document.createElement('select');
         mode.setAttribute('aria-label', 'การระบายสี');
         [['river', 'ระบายสีตามแม่น้ำ (แดง/เหลือง)'], ['plain', 'ไม่ระบายสี']].forEach(function (o) {
           var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; mode.appendChild(op);
         });
-        mode.value = v.mode;
-        mode.onchange = function () { v.mode = mode.value; draw(v); };
+        mode.value = v.fixed ? store.allMode : (v.mode || 'plain');
+        mode.onchange = function () { if (v.fixed) store.allMode = mode.value; else v.mode = mode.value; save(); draw(v); };
         head.appendChild(mode);
         var saveBtn = document.createElement('button'); saveBtn.type = 'button'; saveBtn.className = 'primary'; saveBtn.textContent = 'บันทึกเป็นรูป (PNG)';
         saveBtn.dataset.save = v.id;
         saveBtn.onclick = function () { exportPng(v); };
         head.appendChild(saveBtn);
+        if (!v.fixed) {
+          var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'danger'; rm.textContent = 'ลบแผนที่นี้';
+          twoStepDelete(rm, function () { store.views = store.views.filter(function (x) { return x !== v; }); save(); buildCards(); drawAll(); });
+          head.appendChild(rm);
+        }
         card.appendChild(head);
+        if (!v.fixed) {
+          var pick = document.createElement('div'); pick.className = 'count';
+          pick.textContent = 'เลือกตำบลในภาพนี้ (1–' + MAX_TAMBONS + ' ตำบล, ขอบแดง = ตำบลริมแม่กลอง):';
+          card.appendChild(pick);
+          card.appendChild(tambonChips(v.tambons, function () { h.textContent = viewTitle(v); save(); draw(v); }, MAX_TAMBONS));
+        }
         var cv = document.createElement('canvas'); cv.width = 1800; cv.height = 1200; cv.id = 'cv-' + v.id;
-        cv.setAttribute('aria-label', v.title);
+        cv.setAttribute('aria-label', viewTitle(v));
         card.appendChild(cv);
         var tools = document.createElement('div'); tools.className = 'tools';
         tools.appendChild(document.createTextNode('เครื่องมือ:'));
         var btns = {};
-        [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ']].forEach(function (t) {
+        [['none', 'ดูอย่างเดียว'], ['assign', 'คลิกตำบล'], ['draw', 'วาดกรอบ'], ['erase', 'ลบกรอบ'], ['team', 'วางจุดชุดปฏิบัติการ']].forEach(function (t) {
           var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1]; b.dataset.tool = t[0];
           b.onclick = function () { setTool(v, t[0]); };
           tools.appendChild(b); btns[t[0]] = b;
         });
-        var done = document.createElement('button'); done.type = 'button'; done.textContent = 'เสร็จ (ปิดกรอบ)'; done.hidden = true;
-        done.onclick = function () { finishDraft(v); };
         var zname = document.createElement('input'); zname.type = 'text'; zname.className = 'zone-name'; zname.hidden = true;
         zname.placeholder = 'ชื่อกรอบ (ไม่ใส่ = ชื่อหน่วยงาน)'; zname.id = 'zname-' + v.id; zname.setAttribute('aria-label', 'ชื่อกรอบพื้นที่');
+        var done = document.createElement('button'); done.type = 'button'; done.textContent = 'เสร็จ (ปิดกรอบ)'; done.hidden = true;
+        done.onclick = function () { finishDraft(v); };
         var cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'ยกเลิกกรอบที่วาด'; cancel.hidden = true;
         cancel.onclick = function () { v.draft = null; done.hidden = cancel.hidden = zname.hidden = true; draw(v); };
         tools.appendChild(zname); tools.appendChild(done); tools.appendChild(cancel);
@@ -247,6 +417,7 @@
       Object.keys(c.btns).forEach(function (k) { c.btns[k].classList.toggle('on', k === t); });
       c.cv.className = t;
       c.done.hidden = c.cancel.hidden = c.zname.hidden = true;
+      if (t === 'team' && !store.teams.length) msg('ยังไม่มีชุดปฏิบัติการ — เพิ่มชุดปฏิบัติการก่อน แล้วเลือก “วางจุด” ที่ชุดนั้น');
       if (!silent) draw(v);
     }
     function canvasLonLat(v, e) {
@@ -256,14 +427,13 @@
       if (!m || px < m[0] || px > m[0] + m[2] || py < m[1] || py > m[1] + m[3]) return null;
       return v.proj.inv(px, py);
     }
-    function activeAgency() { return store.agencies.filter(function (a) { return a.id === store.active; })[0]; }
     function onClick(v, e) {
       if (v.tool === 'none') return;
       var ll = canvasLonLat(v, e);
       if (!ll) return;
-      var a = activeAgency();
+      var a = agencyById(store.active);
       if (v.tool === 'assign') {
-        var f = features.filter(function (f) { return f.properties.role === 'banpong' && TM.pointInFeature(ll[0], ll[1], f); })[0];
+        var f = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
         if (!f) { msg('คลิกในพื้นที่ตำบลของ อ.บ้านโป่ง'); return; }
         var th = f.properties.th;
         if (store.assign[th] === a.id) { delete store.assign[th]; msg('ยกเลิกหน่วยงานของ ต.' + th); }
@@ -284,12 +454,20 @@
           }
         }
         msg('ไม่พบกรอบตรงจุดที่คลิก');
+      } else if (v.tool === 'team') {
+        var t = store.teams.filter(function (x) { return x.id === store.activeTeam; })[0];
+        if (!t) { msg('ยังไม่มีชุดปฏิบัติการ — เพิ่มชุดปฏิบัติการก่อน'); return; }
+        t.base = [ll[0], ll[1]];
+        var inT = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
+        if (inT && t.tambons.indexOf(inT.properties.th) < 0) t.tambons.push(inT.properties.th);
+        msg('วางจุดตั้ง “' + (t.name || 'ชุดปฏิบัติการ') + '”' + (inT ? ' ใน ต.' + inT.properties.th : ''));
+        renderTeams(); changed();
       }
     }
     function finishDraft(v, label) {
       if (!v.draft || v.draft.pts.length < 3) { msg('ต้องมีอย่างน้อย 3 จุด'); return; }
       if (label == null) label = cards[v.id].zname.value || '';
-      store.zones.push({ id: uid(), agency: v.draft.agency, pts: v.draft.pts, label: String(label).trim() });
+      store.zones.push({ id: uid('z'), agency: v.draft.agency, pts: v.draft.pts, label: String(label).trim() });
       v.draft = null;
       cards[v.id].done.hidden = cards[v.id].cancel.hidden = cards[v.id].zname.hidden = true;
       cards[v.id].zname.value = '';
@@ -314,24 +492,27 @@
     }
     var lcPromise = loadLandcover();
     function draw(v) {
+      var c = cards[v.id];
+      if (!c) return Promise.resolve();
       var bgv = document.getElementById('bg').value;
       return lcPromise.then(function (lc) {
-        return Promise.resolve([]).then(function (tiles) {
-          var cfg = { canvas: cards[v.id].cv, features: features, river: river, landcover: lc, focus: v.focus,
-            title: v.title, subtitle: v.subtitle, tiles: tiles, note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
-            basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.mode,
-            agencies: store.agencies, assign: store.assign, zones: store.zones, draft: v.draft };
-          v.proj = TM.render(cfg);
-          var list = Object.keys(cfg._used || {}).map(function (id) {
-            var a = store.agencies.filter(function (x) { return x.id === id; })[0], u = cfg._used[id];
-            return (a.name || 'หน่วยงาน') + ': ' + u.tambons.map(function (t) { return 'ต.' + t; }).concat(u.zones ? ['กรอบ ' + u.zones + ' แห่ง'] : []).join(', ');
-          });
-          cards[v.id].assigns.textContent = list.length ? 'ในภาพนี้ — ' + list.join(' · ') : '';
+        var cfg = { canvas: c.cv, features: features, river: river, landcover: lc, focus: v.fixed ? null : (v.tambons.length ? v.tambons : null),
+          title: viewTitle(v), subtitle: v.fixed ? 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' : 'แนวแม่น้ำแม่กลอง หน่วยงานรับผิดชอบ และชุดปฏิบัติการ',
+          tiles: [], note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
+          basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.fixed ? store.allMode : (v.mode || 'plain'),
+          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft };
+        v.proj = TM.render(cfg);
+        var list = Object.keys(cfg._used || {}).map(function (id) {
+          var a = agencyById(id), u = cfg._used[id];
+          return (a.name || 'หน่วยงาน') + ': ' + u.tambons.map(function (t) { return 'ต.' + t; }).concat(u.zones ? ['กรอบ ' + u.zones + ' แห่ง'] : []).join(', ');
         });
+        var tlist = (cfg._teams || []).map(function (x) { return x.n + '. ' + (x.t.name || 'ชุดปฏิบัติการ'); });
+        c.assigns.textContent = (list.length ? 'หน่วยงานในภาพ — ' + list.join(' · ') : '') + (tlist.length ? (list.length ? '  |  ' : '') + 'ชุดปฏิบัติการ — ' + tlist.join(', ') : '');
       });
     }
-    function drawAll() { return Promise.all(VIEWS.map(draw)); }
-    // เมื่อเปิดผ่านลิงก์ claude.ai: ใช้ความสามารถ downloads ของหน้า (ผู้ชมกดยืนยันก่อนบันทึก)
+    function drawAll() { return Promise.all(allViews().map(draw)); }
+
+    // ---------------- บันทึกภาพ ----------------
     var downloadsP = window.claude && typeof window.claude.use === 'function'
       ? window.claude.use('downloads').catch(function () { return null; }) : Promise.resolve(null);
     function saveViaViewer(filename, data, label) {
@@ -341,24 +522,24 @@
           var code = e && e.code;
           if (code === 'declined') { msg('ยกเลิกการบันทึก'); return true; }
           if (code === 'rate_limited') { msg('มีหน้าต่างบันทึกเปิดอยู่ ลองอีกครั้งในอีกสักครู่'); return true; }
-          return false; // ใช้วิธีสำรอง
+          return false;
         });
       });
     }
-    // บันทึกภาพ: ลองดาวน์โหลดไฟล์ และแสดงภาพให้คลิกขวา/กดค้างบันทึก (กรณีหน้าเว็บไม่อนุญาตดาวน์โหลด)
     function exportPng(v) {
-      var cv = cards[v.id].cv;
+      var cv = cards[v.id].cv, file = viewFile(v) + '.png';
       cv.toBlob(function (blob) {
-        saveViaViewer(v.file + '.png', blob, 'รูป ' + v.file + '.png').then(function (handled) { if (!handled) exportPngFallback(v); });
+        saveViaViewer(file, blob, 'รูป ' + file).then(function (handled) { if (!handled) exportPngFallback(v, file); });
       }, 'image/png');
     }
-    function exportPngFallback(v) {
-      var cv = cards[v.id].cv, url = cv.toDataURL('image/png');
+    // ดาวน์โหลดตรง (เปิดจากไฟล์ในเครื่อง) + แสดงภาพให้คลิกขวา/กดค้างบันทึก
+    function exportPngFallback(v, file) {
+      var url = cards[v.id].cv.toDataURL('image/png');
       try {
-        var a = document.createElement('a'); a.href = url; a.download = v.file + '.png';
+        var a = document.createElement('a'); a.href = url; a.download = file;
         document.body.appendChild(a); a.click(); a.remove();
-      } catch (e) { /* ดาวน์โหลดไม่ได้ ใช้ภาพแทน */ }
-      document.getElementById('imgTitle').textContent = v.title + ' (' + v.file + '.png)';
+      } catch (e) { /* ใช้ภาพแทน */ }
+      document.getElementById('imgTitle').textContent = viewTitle(v) + ' (' + file + ')';
       document.getElementById('imgOut').src = url;
       document.getElementById('imgBox').hidden = false;
     }
@@ -370,19 +551,17 @@
       document.getElementById('dataText').value = JSON.stringify(store, null, 2);
       dataMsg(''); document.getElementById('dataBox').hidden = false;
     };
+    document.getElementById('dataClose').onclick = function () { document.getElementById('dataBox').hidden = true; };
     downloadsP.then(function (dl) { document.getElementById('dataSave').hidden = !dl; });
     document.getElementById('dataSave').onclick = function () {
-      saveViaViewer('banpong-agencies.json', document.getElementById('dataText').value, 'ไฟล์ข้อมูล').then(function (ok) {
+      saveViaViewer('banpong-tambon-data.json', document.getElementById('dataText').value, 'ไฟล์ข้อมูล').then(function (ok) {
         dataMsg(ok ? '' : 'บันทึกไฟล์ไม่ได้ในหน้านี้ ใช้ “คัดลอกข้อความ” แทน');
       });
     };
-    document.getElementById('dataClose').onclick = function () { document.getElementById('dataBox').hidden = true; };
     document.getElementById('dataCopy').onclick = function () {
       var ta = document.getElementById('dataText');
-      var done = function () { dataMsg('คัดลอกแล้ว'); };
-      try {
-        navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); dataMsg('เลือกข้อความแล้ว กด Ctrl+C (หรือคัดลอก) เพื่อคัดลอก'); });
-      } catch (e) { ta.select(); dataMsg('เลือกข้อความแล้ว กด Ctrl+C (หรือคัดลอก) เพื่อคัดลอก'); }
+      var fallback = function () { ta.select(); dataMsg('เลือกข้อความแล้ว กด Ctrl+C (หรือคัดลอก) เพื่อคัดลอก'); };
+      try { navigator.clipboard.writeText(ta.value).then(function () { dataMsg('คัดลอกแล้ว'); }, fallback); } catch (e) { fallback(); }
     };
     document.getElementById('importJson').onchange = function (e) {
       var f = e.target.files[0]; if (!f) return;
@@ -393,25 +572,36 @@
       try {
         var v = JSON.parse(document.getElementById('dataText').value);
         if (!v || !Array.isArray(v.agencies)) throw new Error('ไม่พบรายการหน่วยงานในข้อความ');
-        store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active };
-        normalize(); save(); renderRows(); drawAll();
-        dataMsg('นำเข้าข้อมูลแล้ว: ' + store.agencies.length + ' หน่วยงาน, ' + Object.keys(store.assign).length + ' ตำบล, ' + store.zones.length + ' กรอบ');
+        store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active, teams: v.teams || [], activeTeam: v.activeTeam,
+          views: v.views, separate: v.separate, allMode: v.allMode };
+        normalize(); save(); renderAll();
+        dataMsg('นำเข้าข้อมูลแล้ว: ' + store.agencies.length + ' หน่วยงาน, ' + store.teams.length + ' ชุดปฏิบัติการ, ' + store.views.length + ' แผนที่เจาะจง');
       } catch (err) { dataMsg('นำเข้าไม่สำเร็จ: ' + err.message + ' — ตรวจว่าวางข้อความที่คัดลอกจากปุ่มส่งออกครบทั้งหมด'); }
     };
-    document.getElementById('addAgency').onclick = function () { addAgency(); renderRows(); save(); };
-    document.getElementById('bg').onchange = function () { msg(''); drawAll(); };
 
-    load(); renderRows(); buildCards();
-    // รอฟอนต์ Sarabun ก่อนวาดลงภาพ (ไม่เกิน 3 วินาที) แล้ววาดใหม่เมื่อฟอนต์มาถึง
-    drawAll();
+    document.getElementById('addAgency').onclick = function () { addAgency(); renderRows(); renderTeamAgencyOptions(); save(); };
+    document.getElementById('addTeam').onclick = function () { addTeam(); renderTeams(); changed(); };
+    document.getElementById('addView').onclick = function () {
+      store.views.push({ id: uid('v'), tambons: [], mode: 'plain' }); save(); buildCards(); drawAll();
+      msg('เพิ่มแผนที่ใหม่แล้ว — เลือกตำบล 1–' + MAX_TAMBONS + ' ตำบลในภาพนั้น');
+    };
+    document.getElementById('bg').onchange = function () { msg(''); drawAll(); };
+    document.getElementById('separate').onchange = function (e) { store.separate = e.target.checked; changed(); };
+
+    function renderAll() {
+      document.getElementById('separate').checked = store.separate;
+      renderRows(); renderTeams(); buildCards(); drawAll();
+    }
+    load(); renderAll();
+    // รอฟอนต์ Sarabun ก่อนวาดลงภาพ (ไม่เกิน 3 วินาที)
     if (document.fonts && document.fonts.load) {
       Promise.race([document.fonts.load('700 20px Sarabun'), new Promise(function (r) { setTimeout(r, 3000); })]).then(drawAll);
     }
     // สำหรับทดสอบ
     window.tambonMap = {
-      store: function () { return store; }, views: VIEWS, draw: drawAll,
-      setTool: function (id, t) { setTool(VIEWS.filter(function (v) { return v.id === id; })[0], t); },
-      finishDraft: function (id, label) { finishDraft(VIEWS.filter(function (v) { return v.id === id; })[0], label); }
+      store: function () { return store; }, views: function () { return allViews(); }, draw: drawAll,
+      setTool: function (id, t) { setTool(allViews().filter(function (v) { return v.id === id; })[0], t); },
+      finishDraft: function (id, label) { finishDraft(allViews().filter(function (v) { return v.id === id; })[0], label); }
     };
   })();
   </script>
