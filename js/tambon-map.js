@@ -387,6 +387,26 @@
       label(nm, null, ll[0], ll[1], '#111', fz, true);
     });
     cfg._teams = teamsShown;
+    // ถนนน้ำท่วม: สีตามรถที่ยังผ่านได้ (เหลือง เก๋ง → ส้ม กระบะ → แดง รถยกสูง → ม่วง เรือเท่านั้น) · เส้นประ = ถนนแห้งแต่ถูกตัดขาด
+    if (cfg.roads && cfg.roads.segs.length) {
+      ctx.save();
+      ctx.beginPath();
+      bp.forEach(function (f) { f.geometry.coordinates.forEach(function (poly) { poly.forEach(function (r) {
+        r.forEach(function (c, i) { var p = P(c[0], c[1]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath(); }); }); });
+      ctx.clip('evenodd');
+      var lw = cfg.focus ? 4.5 : 2.6, groups = {};
+      cfg.roads.segs.forEach(function (sg) { var k = sg.cut ? 'cut' : sg.c; (groups[k] = groups[k] || []).push(sg); });
+      Object.keys(groups).sort().forEach(function (k) {
+        ctx.beginPath();
+        groups[k].forEach(function (sg) { var a = P(sg.a[0], sg.a[1]), b = P(sg.b[0], sg.b[1]); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); });
+        ctx.lineCap = 'round';
+        if (k === 'cut') { ctx.setLineDash([6, 5]); ctx.strokeStyle = '#37474f'; ctx.lineWidth = lw * 0.7; }
+        else { ctx.setLineDash([]); ctx.strokeStyle = cfg.roads.colors[+k]; ctx.lineWidth = lw; }
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     // กลุ่มเปราะบางรายหมู่บ้าน: วงกลมสีตามระดับเร่งด่วนสูงสุด ตัวเลข = จำนวนคน (ขอบฟ้า = หมู่บ้านอยู่ในพื้นที่น้ำท่วม)
     if (cfg.vuln) cfg.vuln.pins.forEach(function (pn) {
       if (!inView(pn.lon, pn.lat) || (cfg.focus && cfg.focus.indexOf(pn.tambon) < 0)) return;
@@ -398,7 +418,7 @@
       ctx.fillStyle = '#fff'; ctx.font = '700 ' + (cfg.focus ? 16 : 12) + 'px "Sarabun","Noto Sans Thai",Tahoma,sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(pn.total), q[0], q[1] + 1);
       ctx.textAlign = 'left'; ctx.font = '700 ' + (cfg.focus ? 15 : 12) + 'px "Sarabun","Noto Sans Thai",Tahoma,sans-serif';
-      var t = pn.label + (pn.levels[1] ? ' ติดเตียง ' + pn.levels[1] : '');
+      var t = pn.label + (pn.levels[1] ? ' ติดเตียง ' + pn.levels[1] : '') + (pn.access ? ' · ' + pn.access : '');
       ctx.lineWidth = 3.5; ctx.strokeStyle = '#fff'; ctx.strokeText(t, q[0] + r + 5, q[1]); ctx.fillStyle = '#212121'; ctx.fillText(t, q[0] + r + 5, q[1]);
       ctx.restore();
     });
@@ -586,6 +606,10 @@
     if (cfg.flood && cfg.flood.res) {
       legendItems.push(['rgb(158,202,225)', 'น้ำท่วมลึก < 0.5 ม.', 'box'], ['rgb(66,146,198)', 'ลึก 0.5–1 ม.', 'box'], ['rgb(33,102,172)', 'ลึก 1–2 ม.', 'box'], ['rgb(8,48,107)', 'ลึก > 2 ม.', 'box']);
       if (cfg.flood.drain) legendItems.push(['rgb(171,71,188)', 'น้ำย้อนท่อ/หนองบึง/จุดที่สำรวจพบน้ำ', 'box']);
+      if (cfg.roads) {
+        cfg.roads.labels.forEach(function (l, i) { legendItems.push([cfg.roads.colors[i], 'ถนน: ' + l, 'line']); });
+        legendItems.push(['#37474f', 'ถนนแห้งแต่ถูกตัดขาด', 'dash']);
+      }
       if (cfg.flood.riskM) legendItems.push(['rgba(255,152,0,0.6)', 'เสี่ยงท่วมถ้าน้ำขึ้นอีก ' + cfg.flood.riskM + ' ม.', 'box']);
     }
     var fpk = {}; (cfg.floodPoints || []).forEach(function (p) { fpk[p.kind] = 1; });
@@ -638,6 +662,7 @@
       var sum = names ? rows.reduce(function (a, t) { return { rai: a.rai + t.rai, damage: a.damage + t.damage }; }, { rai: 0, damage: 0 }) : r.total;
       ctx.font = '700 16px ' + font; ctx.fillStyle = '#b71c1c';
       cy = wrap(ctx, 'ท่วม ' + fmtRai(sum.rai) + ' ไร่ (' + (sum.rai * 1600 / 1e6).toFixed(1) + ' ตร.กม.) · เสียหาย ~' + fmtBaht(sum.damage), lx, cy + 2, tw, 20);
+      if (fl.roadText && fits(20)) { ctx.font = '600 14px ' + font; ctx.fillStyle = '#4a148c'; cy = wrap(ctx, fl.roadText, lx, cy + 2, tw, 18); }
       var drainSum = names ? rows.reduce(function (a, t) { return a + t.drainRai; }, 0) : r.total.drainRai;
       if (drainSum >= 1) { ctx.font = '600 14px ' + font; ctx.fillStyle = '#6a1b9a'; ctx.fillText('ในจำนวนนี้ น้ำย้อนท่อ/หนองบึง/จุดที่สำรวจพบน้ำ ' + fmtRai(drainSum) + ' ไร่', lx, cy + 2); cy += 22; }
       cy += 4;
@@ -763,6 +788,7 @@
     legendItems.forEach(function (it, i) {
       var ix = lx + Math.floor(i / rowsPer) * colW, iy = ly + (i % rowsPer) * 26;
       if (it[2] === 'pin') { ctx.beginPath(); ctx.arc(ix + 15, iy - 5, 10, 0, Math.PI * 2); ctx.fillStyle = it[0]; ctx.fill(); }
+      else if (it[2] === 'line' || it[2] === 'dash') { ctx.beginPath(); ctx.moveTo(ix + 3, iy - 5); ctx.lineTo(ix + 27, iy - 5); ctx.strokeStyle = it[0]; ctx.lineWidth = it[2] === 'line' ? 5 : 3; ctx.setLineDash(it[2] === 'dash' ? [5, 4] : []); ctx.stroke(); ctx.setLineDash([]); }
       else if (it[2] === 'tri') { ctx.beginPath(); ctx.moveTo(ix + 5, iy - 13); ctx.lineTo(ix + 25, iy - 13); ctx.lineTo(ix + 15, iy + 4); ctx.closePath(); ctx.fillStyle = it[0]; ctx.fill(); }
       else if (it[2] === 'dia') { ctx.beginPath(); ctx.moveTo(ix + 15, iy - 15); ctx.lineTo(ix + 25, iy - 5); ctx.lineTo(ix + 15, iy + 5); ctx.lineTo(ix + 5, iy - 5); ctx.closePath(); ctx.fillStyle = it[0]; ctx.fill(); }
       else { ctx.fillStyle = it[0]; roundRect(ctx, ix, iy - 15, 30, 20, 4); ctx.fill(); ctx.strokeStyle = '#888'; ctx.stroke(); }

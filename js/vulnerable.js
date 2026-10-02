@@ -98,6 +98,16 @@
   };
   function riverOf(fn, key) { var v = fn ? fn(key) : null; return RIVER[v && v.cls] || RIVER.unknown; }
 
+  // สถานะการช่วยเหลือรายบุคคล (เก็บในเครื่องผู้ใช้)
+  var STATUS = {
+    wait: { key: 'wait', label: 'รอ', short: '☐', done: false, color: '#9e9e9e' },
+    going: { key: 'going', label: 'กำลังช่วย', short: 'กำลังช่วย', done: false, color: '#1565c0' },
+    evac: { key: 'evac', label: 'อพยพแล้ว', short: '☑ อพยพแล้ว', done: true, color: '#2e7d32' },
+    safe: { key: 'safe', label: 'ช่วยแล้ว (อยู่บ้านปลอดภัย)', short: '☑ อยู่บ้านปลอดภัย', done: true, color: '#2e7d32' },
+    notfound: { key: 'notfound', label: 'ไม่พบตัว/ย้ายออก', short: 'ไม่พบตัว', done: true, color: '#6d4c41' }
+  };
+  function recId(r) { return [r.tambon, r.moo, r.house, r.name].join('|'); }
+
   function num(s) { var n = parseInt(String(s).replace(/[^\d].*$/, ''), 10); return isNaN(n) ? 9999 : n; }
 
   // เรียงลำดับการเข้าช่วยเหลือ: สถานะน้ำท่วมของหมู่บ้าน → ระดับความเร่งด่วน → ความลึกน้ำ → ตำบล → หมู่ → บ้านเลขที่
@@ -109,12 +119,13 @@
       if (opts.tambons && opts.tambons.indexOf(r.tambon) < 0) return;
       if (opts.levels && opts.levels.indexOf(r.level) < 0) return;
       var pin = pins[mooKey(r.tambon, r.moo)] || null;
-      var rv = opts.river ? opts.river(mooKey(r.tambon, r.moo)) : null;
-      list.push(Object.assign({}, r, { pin: pin, flood: floodStatus(pin, opts.floodAt), river: riverOf(opts.river, mooKey(r.tambon, r.moo)), riverOk: !!(rv && rv.confirmed) }));
+      var key = mooKey(r.tambon, r.moo), rv = opts.river ? opts.river(key) : null, id = recId(r), st = opts.status ? opts.status(id) : null;
+      list.push(Object.assign({}, r, { id: id, pin: pin, flood: floodStatus(pin, opts.floodAt), river: riverOf(opts.river, key), riverOk: !!(rv && rv.confirmed),
+        access: opts.access ? opts.access(key) : null, status: STATUS[st && st.s] || STATUS.wait, statusAt: st && st.t, statusTeam: st && st.team }));
     });
-    // ลำดับ: สถานะน้ำท่วมของหมู่บ้าน → หมู่ริมน้ำ/ใกล้น้ำ → ระดับความเร่งด่วน → ความลึกน้ำ
+    // ลำดับ: ยังไม่ได้ช่วย → สถานะน้ำท่วมของหมู่บ้าน → หมู่ริมน้ำ/ใกล้น้ำ → ระดับความเร่งด่วน → ความลึกน้ำ
     list.sort(function (a, b) {
-      return a.flood.rank - b.flood.rank || a.river.rank - b.river.rank || a.level - b.level || b.flood.depth - a.flood.depth ||
+      return (a.status.done - b.status.done) || a.flood.rank - b.flood.rank || a.river.rank - b.river.rank || a.level - b.level || b.flood.depth - a.flood.depth ||
         a.tambon.localeCompare(b.tambon, 'th') || num(a.moo) - num(b.moo) || num(a.house) - num(b.house) || a.name.localeCompare(b.name, 'th');
     });
     list.forEach(function (r, i) { r.rank = i + 1; });
@@ -126,8 +137,9 @@
     var map = {}, out = [];
     list.forEach(function (r) {
       var k = mooKey(r.tambon, r.moo), g = map[k];
-      if (!g) { g = map[k] = { key: k, tambon: r.tambon, moo: r.moo, hc: r.hc, pin: r.pin, flood: r.flood, river: r.river || RIVER.unknown, riverOk: r.riverOk, total: 0, levels: [0, 0, 0, 0, 0], top: 4 }; out.push(g); }
+      if (!g) { g = map[k] = { key: k, tambon: r.tambon, moo: r.moo, hc: r.hc, pin: r.pin, flood: r.flood, river: r.river || RIVER.unknown, riverOk: r.riverOk, access: r.access, total: 0, done: 0, levels: [0, 0, 0, 0, 0], open: [0, 0, 0, 0, 0], top: 4 }; out.push(g); }
       g.total++; g.levels[r.level]++; if (r.level < g.top) g.top = r.level;
+      if (r.status && r.status.done) g.done++; else g.open[r.level]++;
     });
     out.sort(function (a, b) { return a.flood.rank - b.flood.rank || a.river.rank - b.river.rank || a.top - b.top || a.tambon.localeCompare(b.tambon, 'th') || num(a.moo) - num(b.moo); });
     return out;
@@ -177,10 +189,11 @@
     // สรุปตัวเลข
     var y = 108, bw = (W - 2 * P - 5 * 12) / 6;
     var cnt = [0, 0, 0, 0, 0], fl = { flooded: 0, risk: 0, unknown: 0, dry: 0 };
-    list.forEach(function (r) { cnt[r.level]++; fl[r.flood.key]++; });
+    var done = 0;
+    list.forEach(function (r) { cnt[r.level]++; fl[r.flood.key]++; if (r.status && r.status.done) done++; });
     [['รวม', list.length + ' คน', '#263238'], [LEVELS[1].short, cnt[1] + ' คน', LEVELS[1].color], [LEVELS[2].short, cnt[2] + ' คน', LEVELS[2].color],
      [LEVELS[3].short + (cnt[4] ? ' / ไม่ระบุ ' + cnt[4] : ''), cnt[3] + ' คน', LEVELS[3].color],
-     ['อยู่ในหมู่บ้านที่น้ำท่วม', fl.flooded + ' คน', FLOOD_COLOR.flooded], ['เสี่ยง / ไม่ทราบตำแหน่ง', fl.risk + ' / ' + fl.unknown + ' คน', FLOOD_COLOR.risk]].forEach(function (b, i) {
+     ['อยู่ในหมู่บ้านที่น้ำท่วม / เสี่ยง', fl.flooded + ' / ' + fl.risk + ' คน', FLOOD_COLOR.flooded], ['ช่วยแล้ว / เหลือ', done + ' / ' + (list.length - done) + ' คน', '#2e7d32']].forEach(function (b, i) {
       var x = P + i * (bw + 12);
       ctx.fillStyle = '#f5f5f5'; ctx.fillRect(x, y, bw, 64); ctx.fillStyle = b[2]; ctx.fillRect(x, y, 6, 64);
       ctx.fillStyle = '#555'; ctx.font = '500 15px ' + FONT; ctx.fillText(fit(ctx, b[0], bw - 24), x + 16, y + 18);
@@ -190,14 +203,14 @@
     var cols, rows;
     if (cfg.page === 0) {
       ctx.fillStyle = '#1a1a1a'; ctx.font = '700 20px ' + FONT; ctx.fillText('สรุปรายหมู่บ้าน — เรียงตามสถานะน้ำท่วม หมู่ริมน้ำ และความเร่งด่วน', P, y); y += 26;
-      cols = [['ลำดับ', 70], ['ตำบล', 160], ['หมู่', 60], ['ที่ตั้งเทียบแม่น้ำ', 215], ['รพ.สต.', 125], ['ติดเตียง', 100], ['ติดบ้าน/เคลื่อนไหว', 170], ['สื่อสาร/จิต', 120], ['ไม่ระบุ', 80], ['รวม', 80], ['สถานะน้ำ (หมู่บ้าน)', 180], ['ชุดปฏิบัติการ', 0]];
+      cols = [['ลำดับ', 60], ['ตำบล', 150], ['หมู่', 55], ['ที่ตั้งเทียบแม่น้ำ', 200], ['การเข้าถึง', 150], ['ติดเตียง', 90], ['ติดบ้าน/เคลื่อนไหว', 160], ['สื่อสาร/จิต', 110], ['ไม่ระบุ', 70], ['รวม', 70], ['ช่วยแล้ว', 90], ['สถานะน้ำ (หมู่บ้าน)', 170], ['ชุดปฏิบัติการ', 0]];
       rows = byMoo(list).map(function (g, i) {
-        return [i + 1, 'ต.' + g.tambon, g.moo, { riverCell: g }, g.hc, g.levels[1] || '-', g.levels[2] || '-', g.levels[3] || '-', g.levels[4] || '-', g.total, g, cfg.teamFor ? cfg.teamFor(g.tambon) : ''];
+        return [i + 1, 'ต.' + g.tambon, g.moo, { riverCell: g }, { accessCell: g }, g.levels[1] || '-', g.levels[2] || '-', g.levels[3] || '-', g.levels[4] || '-', g.total, g.done ? g.done + '/' + g.total : '-', g, cfg.teamFor ? cfg.teamFor(g.tambon) : ''];
       });
     } else {
-      cols = [['ลำดับช่วย', 90], ['ระดับ', 150], ['ชื่อ-สกุล', 250], ['กลุ่ม', 200], ['บ้านเลขที่', 105], ['หมู่', 55], ['ตำบล', 120], ['ริมน้ำ', 150], ['รพ.สต.', 110], ['สถานะน้ำ (หมู่บ้าน)', 170], ['ชุดปฏิบัติการ', 140], ['ช่วยแล้ว', 0]];
+      cols = [['ลำดับช่วย', 85], ['ระดับ', 140], ['ชื่อ-สกุล', 230], ['กลุ่ม', 170], ['บ้านเลขที่', 95], ['หมู่', 50], ['ตำบล', 110], ['ริมน้ำ', 140], ['การเข้าถึง', 130], ['สถานะน้ำ (หมู่บ้าน)', 160], ['ชุดปฏิบัติการ', 130], ['การช่วยเหลือ', 0]];
       rows = list.slice((cfg.page - 1) * PER_PAGE, cfg.page * PER_PAGE).map(function (r) {
-        return [r.rank, r, cfg.mask ? maskName(r.name) : r.name, r.group, r.house, r.moo, r.tambon, { riverCell: r }, r.hc, r, cfg.teamFor ? cfg.teamFor(r.tambon) : '', '☐'];
+        return [r.rank, r, cfg.mask ? maskName(r.name) : r.name, r.group, r.house, r.moo, r.tambon, { riverCell: r }, { accessCell: r }, r, r.statusTeam || (cfg.teamFor ? cfg.teamFor(r.tambon) : ''), { helpCell: r }];
       });
     }
     var x0 = P, tw = W - 2 * P, used = cols.reduce(function (a, c) { return a + c[1]; }, 0);
@@ -215,7 +228,18 @@
       r.forEach(function (v, j) {
         var w = cols[j][1];
         ctx.font = (j === 2 && cfg.page > 0 ? '600 ' : '400 ') + '16px ' + FONT; ctx.fillStyle = '#1a1a1a';
-        if (v && typeof v === 'object' && v.riverCell) {
+        if (v && typeof v === 'object' && v.accessCell) {
+          var ac = v.accessCell.access;
+          ctx.font = '700 14px ' + FONT; ctx.fillStyle = ac ? (ac.key === 'car' ? '#2e7d32' : ac.color) : '#9e9e9e';
+          ctx.fillText(fit(ctx, ac ? (ac.key === 'car' ? 'รถทั่วไป' : ac.key === 'boat' ? 'ต้องใช้เรือ' : ac.label) : '—', w - 12), cx + 8, y + rh / 2);
+        }
+        else if (v && typeof v === 'object' && v.helpCell) {
+          var hs = v.helpCell.status || STATUS.wait;
+          ctx.font = (hs.key === 'wait' ? '400 20px ' : '700 13px ') + FONT; ctx.fillStyle = hs.color;
+          var tm = v.helpCell.statusAt ? ' ' + new Date(v.helpCell.statusAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
+          ctx.fillText(fit(ctx, hs.short + (hs.key === 'wait' ? '' : tm), w - 12), cx + 8, y + rh / 2);
+        }
+        else if (v && typeof v === 'object' && v.riverCell) {
           var rc = v.riverCell.river || RIVER.unknown;
           ctx.font = '700 14px ' + FONT; ctx.fillStyle = rc.key === 'river' ? rc.color : rc.key === 'near' ? '#0288d1' : '#757575';
           ctx.fillText(fit(ctx, (rc.key === 'river' ? '≈ ' : '') + rc.label + (rc.key !== 'unknown' && !v.riverCell.riverOk ? ' (ประมาณ)' : ''), w - 12), cx + 8, y + rh / 2);
@@ -233,12 +257,12 @@
     ctx.font = '400 13px ' + FONT; ctx.fillStyle = '#555';
     var lv = LEVELS.slice(1).map(function (l) { return l.label + ': ' + l.need; }).join(' · ');
     ctx.fillText(fit(ctx, 'เกณฑ์: ' + lv, W - 2 * P), P, H - 50);
-    ctx.fillText(fit(ctx, 'ลำดับช่วย: หมู่บ้านที่น้ำท่วม (ตามแบบจำลองคาดการณ์) → หมู่ริมน้ำ/ใกล้น้ำ → ระดับความเร่งด่วน → ความลึกน้ำ · “(ประมาณ)” = ตำแหน่งเทียบแม่น้ำยังไม่ยืนยันกับพื้นที่ · สถานะน้ำเป็นของตำแหน่งหมู่บ้านที่ปักไว้ ไม่ใช่รายบ้าน' + (cfg.source ? ' · ที่มา: ' + cfg.source : ''), W - 2 * P), P, H - 30);
+    ctx.fillText(fit(ctx, 'ลำดับช่วย: ยังไม่ได้ช่วย → หมู่บ้านที่น้ำท่วม (ตามแบบจำลองคาดการณ์) → หมู่ริมน้ำ/ใกล้น้ำ → ระดับความเร่งด่วน → ความลึกน้ำ · “(ประมาณ)” = ตำแหน่งเทียบแม่น้ำยังไม่ยืนยันกับพื้นที่ · สถานะน้ำเป็นของตำแหน่งหมู่บ้านที่ปักไว้ ไม่ใช่รายบ้าน' + (cfg.source ? ' · ที่มา: ' + cfg.source : ''), W - 2 * P), P, H - 30);
     ctx.fillStyle = '#b71c1c'; ctx.font = '700 13px ' + FONT;
     ctx.fillText('ข้อมูลส่วนบุคคล — ใช้เพื่อการช่วยเหลือผู้ประสบภัยเท่านั้น ห้ามเผยแพร่ต่อสาธารณะ (พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562)', P, H - 10);
   }
 
-  var api = { RIVER: RIVER, renderPage: renderPage, pageCount: pageCount, PER_PAGE: PER_PAGE, floodText: floodText, LEVELS: LEVELS, FLOOD: FLOOD, classify: classify, parseRows: parseRows, prioritize: prioritize, byMoo: byMoo, mooKey: mooKey, maskName: maskName };
+  var api = { STATUS: STATUS, recId: recId, RIVER: RIVER, renderPage: renderPage, pageCount: pageCount, PER_PAGE: PER_PAGE, floodText: floodText, LEVELS: LEVELS, FLOOD: FLOOD, classify: classify, parseRows: parseRows, prioritize: prioritize, byMoo: byMoo, mooKey: mooKey, maskName: maskName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Vulnerable = api;
 })(this);

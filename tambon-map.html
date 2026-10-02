@@ -86,7 +86,8 @@
     /* คาดการณ์น้ำท่วม */
     .fc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 12px; margin: 4px; }
     .fc-grid label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); min-width: 0; }
-    .fc-grid input, .fc-grid select { width: 100%; min-width: 0; color: var(--text); }
+    .fc-grid input, .fc-grid select, .fc-grid textarea { width: 100%; min-width: 0; color: var(--text); }
+    textarea { font: inherit; font-size: 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 5px 7px; resize: vertical; }
     .fc-grid input.big { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .steps { display: flex; flex-wrap: wrap; gap: 4px; }
     .steps button { padding: 3px 8px; font-size: 13px; }
@@ -180,6 +181,33 @@
       ค่าประมาณเพื่อวางแผน ความสูงพื้นที่คลาดเคลื่อนได้ ±0.5–1 ม. ไม่รวมคันกั้นน้ำ/ประตูระบายน้ำ</p>
   </div>
 
+  <div class="card" id="accessCard">
+    <div class="card-head">
+      <h2>เส้นทางและการเข้าถึงหมู่บ้าน — รถชนิดไหนเข้าได้ หมู่ไหนต้องใช้เรือ</h2>
+      <label class="chip"><input type="checkbox" id="accShow" checked> แสดงถนนน้ำท่วมบนแผนที่</label>
+    </div>
+    <div class="fc-grid">
+      <label>รถเก๋ง ลุยน้ำได้ไม่เกิน (ม.)<input type="number" id="accV0" step="0.05" min="0" max="2"></label>
+      <label>รถกระบะ ลุยน้ำได้ไม่เกิน (ม.)<input type="number" id="accV1" step="0.05" min="0" max="2"></label>
+      <label>รถยกสูง/รถทหาร ลุยน้ำได้ไม่เกิน (ม.)<input type="number" id="accV2" step="0.05" min="0" max="3"></label>
+    </div>
+    <details>
+      <summary>ความสูงผิวถนนเหนือพื้นที่รอบข้าง (คันทาง) — ปรับได้</summary>
+      <div class="fc-grid" style="margin-top:6px">
+        <label>ถนนสายหลัก (ม.)<input type="number" id="accR0" step="0.1" min="0" max="3"></label>
+        <label>ถนนสายรอง (ม.)<input type="number" id="accR1" step="0.1" min="0" max="3"></label>
+        <label>ถนนท้องถิ่น (ม.)<input type="number" id="accR2" step="0.1" min="0" max="3"></label>
+        <label>ซอย/ถนนเล็ก (ม.)<input type="number" id="accR3" step="0.1" min="0" max="3"></label>
+      </div>
+    </details>
+    <div class="hint" id="accStatus" role="status">กำลังเตรียมโครงข่ายถนน…</div>
+    <div class="stats" id="accStats"></div>
+    <div class="wrap-table"><table class="fc" id="accTable"></table></div>
+    <p class="hint">วิธีคิด: ความลึกน้ำบนถนน = ความลึกน้ำคาดการณ์ (ตามโหมดในการ์ดด้านบน) − ความสูงคันทาง · รถผ่านช่วงถนนได้เมื่อลึกไม่เกินเกณฑ์ ·
+      “ไปถึงได้” = มีเส้นทางต่อเนื่องจาก<b>จุดตั้งชุดปฏิบัติการ</b> (ถ้าปักไว้) หรือจากถนนสายหลักที่น้ำไม่ท่วม · หมู่บ้านเข้าถึงด้วยรถได้เมื่อมีถนนที่ไปถึงได้ในรัศมี 400 ม.
+      และน้ำที่ตัวหมู่บ้านไม่เกินเกณฑ์ · ตำแหน่งหมู่บ้านใช้ที่ปักไว้ หรือค่าประมาณจากที่อยู่สถานที่ (≈) · ถนนจาก OpenStreetMap/Overture</p>
+  </div>
+
   <div class="card" id="vulnCard">
     <div class="card-head">
       <h2>บัญชีกลุ่มเปราะบาง — เข้าช่วยเหลือเป็นลำดับแรก</h2>
@@ -206,6 +234,13 @@
       <p class="hint">ลำดับช่วย: หมู่บ้านที่น้ำท่วม (ตามคาดการณ์) → <b>ริมน้ำ</b> → ใกล้น้ำ 1–2 กม. → ไม่ทราบ → ห่างน้ำ แล้วจึงตามระดับความเร่งด่วน ·
         ค่าเริ่มต้น<b>ประมาณจากที่อยู่สถานที่ในแผนที่ (ยังไม่ยืนยัน)</b> — แก้ให้ตรงกับข้อมูลจาก อบต./ผู้ใหญ่บ้าน แล้วติ๊ก “ยืนยันแล้ว”</p>
       <div class="wrap-table"><table class="ag pts" id="riverTable"></table></div>
+      <h3 style="margin:14px 4px 4px;font-size:15px">ติดตามการช่วยเหลือรายบุคคล</h3>
+      <div class="row" style="margin:4px">
+        <label>แสดง <select id="helpFilter"><option value="open">ยังไม่ได้ช่วย</option><option value="all">ทั้งหมด</option><option value="done">ช่วยแล้ว</option></select></label>
+        <input type="search" id="helpSearch" placeholder="ค้นหาชื่อ / หมู่ / บ้านเลขที่" aria-label="ค้นหา" style="min-width:200px">
+        <span class="hint" id="helpCount"></span>
+      </div>
+      <div class="wrap-table" style="max-height:520px;overflow:auto"><table class="ag pts" id="helpTable"></table></div>
       <div class="row" style="margin:8px 4px">
         <label>หน้า <select id="vulnPage"></select></label>
         <button type="button" class="primary" id="vulnSavePage">บันทึกรูปหน้านี้ (PNG)</button>
@@ -214,6 +249,25 @@
       </div>
       <canvas id="vulnCanvas" class="sheet" width="1754" height="1240" aria-label="ภาพบัญชีกลุ่มเปราะบาง"></canvas>
     </div>
+  </div>
+
+  <div class="card" id="sitrepCard">
+    <div class="card-head">
+      <h2>รายงานสถานการณ์ประจำวัน (SITREP)</h2>
+      <button type="button" class="primary" id="sitSave">บันทึกรายงานเป็นรูป (PNG)</button>
+    </div>
+    <div class="fc-grid">
+      <label>หน่วย<input type="text" id="sitUnit"></label>
+      <label>ผู้รายงาน / ตำแหน่ง<input type="text" id="sitBy"></label>
+      <label>ช่วงเวลารายงาน<input type="text" id="sitPeriod" placeholder="เช่น ๐๖.๐๐–๑๘.๐๐ น."></label>
+    </div>
+    <div class="fc-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+      <label>ผลการปฏิบัติ<textarea id="sitDone" rows="4"></textarea></label>
+      <label>ปัญหา/ข้อขัดข้อง และความต้องการสนับสนุน<textarea id="sitNeed" rows="4"></textarea></label>
+      <label>แผนการปฏิบัติต่อไป / ข้อสั่งการ<textarea id="sitNext" rows="4"></textarea></label>
+    </div>
+    <p class="hint">รายงานรวบรวมอัตโนมัติ: ระดับน้ำ K.55A และการคาดการณ์ · พื้นที่ท่วมรายตำบล · ถนนและหมู่บ้านที่ต้องใช้เรือ · กลุ่มเปราะบาง (เฉพาะตัวเลข ไม่มีรายชื่อ) · ชุดปฏิบัติการ · แผนที่ภาพรวม</p>
+    <canvas id="sitCanvas" class="sheet" width="1754" height="1240" aria-label="ภาพรายงานสถานการณ์"></canvas>
   </div>
 
   <div class="card">
@@ -279,6 +333,8 @@
   <script src="js/flood-forecast.js"></script>
   <script src="js/vulnerable.js"></script>
   <script src="data/banpong-moo-river.js"></script>
+  <script src="data/banpong-villages.js"></script>
+  <script src="js/access.js"></script>
   <script src="vendor/xlsx/xlsx.full.min.js"></script>
   <script>
   (function () {
@@ -311,6 +367,8 @@
       if (!Array.isArray(store.forecast.obs)) store.forecast.obs = [];
       store.vuln = Object.assign({ tambons: ['คุ้งพยอม', 'บ้านม่วง'], mask: false, show: true, pins: {}, active: null, river: {} }, store.vuln || {});
       if (!store.vuln.river || typeof store.vuln.river !== 'object') store.vuln.river = {};
+      store.access = Object.assign({ show: true, veh: [0.3, 0.5, 0.8], raise: [1.0, 0.7, 0.4, 0.2] }, store.access || {});
+      store.sitrep = Object.assign({ unit: 'ช.1 พัน.52', by: '', period: '', done: '', need: '', next: '' }, store.sitrep || {});
       if (!store.vuln.pins || typeof store.vuln.pins !== 'object') store.vuln.pins = {};
       if (!(store.forecast.H > 0)) store.forecast.H = F0.H;
       if (!store.assign || typeof store.assign !== 'object') store.assign = {};
@@ -441,7 +499,7 @@
         head.appendChild(st);
         if (t.base) {
           var clr = document.createElement('button'); clr.type = 'button'; clr.textContent = 'ลบจุดตั้ง';
-          clr.onclick = function () { t.base = null; renderTeams(); changed(); };
+          clr.onclick = function () { t.base = null; accessCompute(); vulnRender(); renderTeams(); changed(); };
           head.appendChild(clr);
         }
         var del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'ลบชุด';
@@ -602,6 +660,7 @@
         var inT = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
         if (inT && t.tambons.indexOf(inT.properties.th) < 0) t.tambons.push(inT.properties.th);
         msg('วางจุดตั้ง “' + (t.name || 'ชุดปฏิบัติการ') + '”' + (inT ? ' ใน ต.' + inT.properties.th : ''));
+        accessCompute(); vulnRender();
         renderTeams(); changed();
       } else if (v.tool === 'drain' || v.tool === 'pond') {
         var inS = TAMBONS.filter(function (f) { return TM.pointInFeature(ll[0], ll[1], f); })[0];
@@ -628,7 +687,7 @@
         store.vuln.active = nxt ? nxt.key : key;
         msg('ปักตำแหน่ง ต.' + tb + ' ม.' + key.split('|')[1] + (inM && inM.properties.th !== tb ? ' — ⚠ จุดนี้อยู่ใน ต.' + inM.properties.th : '') +
           (nxt ? ' · ถัดไป: ต.' + nxt.tambon + ' ม.' + nxt.moo : ' · ปักครบทุกหมู่แล้ว'));
-        save(); vulnRender(); drawAll();
+        save(); accessCompute(); vulnRender(); drawAll();
       }
     }
     function finishDraft(v, label) {
@@ -672,6 +731,7 @@
       if (!fcImage) { fcImage = document.createElement('canvas'); fcImage.width = FMETA.w; fcImage.height = FMETA.h; }
       fcImage.getContext('2d').putImageData(new ImageData(img, FMETA.w, FMETA.h), 0, 0);
       fcTable();
+      accessCompute();
     }
     function fcNote() {
       var f = store.forecast;
@@ -897,6 +957,141 @@
       return out;
     }
 
+    // ---------- เส้นทางและการเข้าถึง ----------
+    var A = window.Access, accGraph = null, accRes = null, accByKey = {}, accSegs = [];
+    var ROAD_LABELS = ['เก๋งยังผ่านได้ (ระวัง)', 'เก๋งไม่ได้ · กระบะผ่านได้', 'เฉพาะรถยกสูง/รถทหาร', 'เรือเท่านั้น'];
+    function fmBbox() {
+      var n = 256 * Math.pow(2, FMETA.z);
+      function lat(y) { var k = Math.PI - 2 * Math.PI * y / n; return 180 / Math.PI * Math.atan(0.5 * (Math.exp(k) - Math.exp(-k))); }
+      return [FMETA.x0 / n * 360 - 180, lat(FMETA.y0 + FMETA.h), (FMETA.x0 + FMETA.w) / n * 360 - 180, lat(FMETA.y0)];
+    }
+    function accVehicles() { return A.VEHICLES.map(function (v, i) { return Object.assign({}, v, { maxDepth: store.access.veh[i] }); }); }
+    function accDepthAt(lon, lat) { var k = fcGrid.cellOf(lon, lat); return k < 0 ? 0 : fcRes.depth[k]; }
+    function villDepth(lon, lat) {
+      var k = fcGrid.cellOf(lon, lat); if (k < 0) return 0;
+      var w = FMETA.w, x = k % w, y = (k - x) / w, mx = 0;
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) { var kk = (y + dy) * w + x + dx; if (fcRes.depth[kk] > mx) mx = fcRes.depth[kk]; }
+      return mx;
+    }
+    function accessFor(key) { var v = accByKey[key]; return v ? v.access : null; }
+    function accessCompute() {
+      if (!fcGrid || !fcRes || !A || !window.BANPONG_BASEMAP) return;
+      var bb = fmBbox();
+      if (!accGraph) accGraph = A.buildGraph(window.BANPONG_BASEMAP, bb);
+      var pins = mergedPins();
+      var villages = Object.keys(pins).map(function (k) { return { key: k, lon: pins[k][0], lat: pins[k][1], depth: villDepth(pins[k][0], pins[k][1]) }; });
+      var bases = store.teams.filter(function (t) { return t.base; }).map(function (t) { return t.base; });
+      accRes = A.analyze(accGraph, { depthAt: accDepthAt, vehicles: accVehicles(), raise: store.access.raise, bases: bases, villages: villages,
+        inArea: function (lon, lat) { var k = fcGrid.cellOf(lon, lat); return k >= 0 && fcGrid.tam[k] !== 255; } });
+      accByKey = {}; accRes.villages.forEach(function (v) { accByKey[v.key] = v; });
+      accSegs = A.segments(accGraph, accRes, bb);
+      renderAccess();
+    }
+    function renderAccess() {
+      if (!accRes) return;
+      var r = accRes, veh = r.vehicles, f = store.forecast;
+      $('accStatus').textContent = 'ระดับน้ำ ' + f.H.toFixed(2) + ' ม. (' + (f.mode === 'volume' ? 'ตามปริมาณน้ำล้น ' + f.hours + ' ชม.' : 'ขอบเขตสูงสุด') + ') · เส้นทางคิดจาก ' +
+        (r.fromBases ? 'จุดตั้งชุดปฏิบัติการ ' + store.teams.filter(function (t) { return t.base; }).length + ' จุด' : 'ถนนสายหลักที่น้ำไม่ท่วม (ยังไม่ได้ปักจุดตั้งชุดปฏิบัติการ)');
+      var st = $('accStats'); st.textContent = '';
+      var boat = r.villages.filter(function (v) { return v.access.key === 'boat'; }).length, truck = r.villages.filter(function (v) { return v.access.key === 'truck'; }).length;
+      [['ถนนน้ำท่วม (ใน อ.บ้านโป่ง)', r.wetKm.toFixed(1) + ' กม.', 'เก๋งยังผ่าน ' + r.lenBy[0].toFixed(1) + ' กม.', false],
+       ['รถเก๋งผ่านไม่ได้', (r.wetKm - r.lenBy[0]).toFixed(1) + ' กม.', 'กระบะผ่านได้ ' + r.lenBy[1].toFixed(1) + ' กม.', false],
+       ['เฉพาะรถยกสูง/รถทหาร', r.lenBy[2].toFixed(1) + ' กม.', 'ลึก ' + veh[1].maxDepth + '–' + veh[2].maxDepth + ' ม.', false],
+       ['เรือเท่านั้น', r.lenBy[3].toFixed(1) + ' กม.', 'ลึกเกิน ' + veh[2].maxDepth + ' ม.', true],
+       ['ถนนแห้งแต่ถูกตัดขาด', r.cutKm.toFixed(1) + ' กม.', 'รถทหารก็เข้าไม่ถึง', false],
+       ['หมู่บ้านต้องใช้เรือ / รถยกสูง', boat + ' / ' + truck + ' หมู่', 'จาก ' + r.villages.length + ' หมู่ที่ทราบตำแหน่ง', true]].forEach(function (x) {
+        var d = document.createElement('div'); d.className = 'stat' + (x[3] ? ' bad' : '');
+        var a = document.createElement('span'); a.textContent = x[0]; var b = document.createElement('b'); b.textContent = x[1]; var c = document.createElement('span'); c.textContent = x[2];
+        d.appendChild(a); d.appendChild(b); d.appendChild(c); st.appendChild(d);
+      });
+      var t = $('accTable'); t.textContent = '';
+      var rank = { boat: 0, truck: 1, pickup: 2, car: 3 };
+      var rows = r.villages.filter(function (v) { return v.access.key !== 'car'; }).sort(function (a, b) {
+        return rank[a.access.key] - rank[b.access.key] || b.depth - a.depth || a.key.localeCompare(b.key, 'th');
+      });
+      var vg = {}; if (vlist.length) V.byMoo(vlist).forEach(function (g) { vg[g.key] = g; });
+      var h = document.createElement('tr');
+      ['หมู่บ้าน', 'เข้าถึงได้ด้วย', 'น้ำที่หมู่บ้าน (ม.)', 'ตำแหน่ง', 'กลุ่มเปราะบาง'].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
+      t.appendChild(h);
+      if (!rows.length) { var e0 = document.createElement('tr'), c0 = document.createElement('td'); c0.colSpan = 5; c0.textContent = 'ทุกหมู่บ้านที่ทราบตำแหน่งเข้าถึงได้ด้วยรถทั่วไป'; e0.appendChild(c0); t.appendChild(e0); }
+      rows.forEach(function (v) {
+        var tr = document.createElement('tr'), kk = v.key.split('|');
+        function td(x, color) { var c = document.createElement('td'); c.textContent = x; if (color) { c.style.color = color; c.style.fontWeight = 700; } tr.appendChild(c); }
+        td('ต.' + kk[0] + ' ม.' + kk[1]);
+        td(v.access.key === 'boat' ? 'เรือเท่านั้น' + (v.depth <= 0.02 ? ' (หมู่บ้านไม่ท่วม แต่ถนนถูกตัด)' : '') : v.access.label, v.access.color);
+        td(v.depth > 0.02 ? v.depth.toFixed(2) : '—');
+        td(store.vuln.pins[v.key] ? 'ปักเอง' : VILL[v.key] ? '≈ ประมาณ (' + VILL[v.key].n + ' แห่ง)' : '—');
+        var g = vg[v.key]; td(g ? g.total + ' คน' + (g.levels[1] ? ' (ติดเตียง ' + g.levels[1] + ')' : '') : '—');
+        t.appendChild(tr);
+      });
+    }
+    function roadsCfg() {
+      if (!store.access.show || !store.forecast.show || !accRes) return null;
+      return { segs: accSegs, colors: accRes.vehicles.map(function (v) { return v.color; }).concat([A.BOAT.color]), labels: ROAD_LABELS };
+    }
+    function roadText() {
+      if (!accRes) return '';
+      var boat = accRes.villages.filter(function (v) { return v.access.key === 'boat'; }).length;
+      return 'ถนนน้ำท่วมทั้งอำเภอ ' + accRes.wetKm.toFixed(0) + ' กม. (เรือเท่านั้น ' + accRes.lenBy[3].toFixed(0) + ' กม.)' + (boat ? ' · หมู่บ้านต้องใช้เรือ ' + boat + ' หมู่' : '');
+    }
+    [0, 1, 2].forEach(function (i) {
+      $('accV' + i).oninput = function () { var v = parseFloat(this.value); if (v >= 0) { store.access.veh[i] = v; save(); accessCompute(); vulnRender(); drawAll(); } };
+    });
+    [0, 1, 2, 3].forEach(function (i) {
+      $('accR' + i).oninput = function () { var v = parseFloat(this.value); if (v >= 0) { store.access.raise[i] = v; save(); accessCompute(); vulnRender(); drawAll(); } };
+    });
+    $('accShow').onchange = function () { store.access.show = this.checked; save(); drawAll(); };
+    function accInputs() {
+      [0, 1, 2].forEach(function (i) { $('accV' + i).value = store.access.veh[i]; });
+      [0, 1, 2, 3].forEach(function (i) { $('accR' + i).value = store.access.raise[i]; });
+      $('accShow').checked = store.access.show;
+    }
+
+    // ---------- สถานะการช่วยเหลือรายบุคคล (เก็บเฉพาะเครื่องนี้ เช่นเดียวกับรายชื่อ) ----------
+    var SKEY = 'banpong-vulnerable-status-v1', vstatus = {};
+    try { vstatus = JSON.parse(localStorage.getItem(SKEY) || '{}') || {}; } catch (e) { vstatus = {}; }
+    function statusFor(id) { return vstatus[id] || null; }
+    function setStatus(id, s, team) {
+      if (s === 'wait' && !team) delete vstatus[id];
+      else vstatus[id] = { s: s, t: new Date().toISOString(), team: team || (vstatus[id] && vstatus[id].team) || '' };
+      try { localStorage.setItem(SKEY, JSON.stringify(vstatus)); } catch (e) { /* ใช้เฉพาะรอบนี้ */ }
+    }
+    var helpTimer = 0;
+    function renderHelp() {
+      var t = $('helpTable'); t.textContent = '';
+      var filt = $('helpFilter').value, q = $('helpSearch').value.trim();
+      var rows = vlist.filter(function (r) {
+        if (filt === 'open' && r.status.done) return false;
+        if (filt === 'done' && !r.status.done) return false;
+        return !q || (r.name + ' ม.' + r.moo + ' ' + r.house + ' ' + r.tambon).indexOf(q) >= 0;
+      });
+      var done = vlist.filter(function (r) { return r.status.done; }).length;
+      $('helpCount').textContent = 'ช่วยแล้ว ' + done + ' / ' + vlist.length + ' คน · แสดง ' + Math.min(rows.length, 300) + (rows.length > 300 ? ' จาก ' + rows.length : '') + ' รายการ';
+      var h = document.createElement('tr');
+      ['ลำดับ', 'ระดับ', 'ชื่อ-สกุล', 'บ้านเลขที่', 'หมู่', 'ตำบล', 'การเข้าถึง', 'สถานะ', 'ชุดที่ไปช่วย', 'เวลา'].forEach(function (x) { var th = document.createElement('th'); th.textContent = x; h.appendChild(th); });
+      t.appendChild(h);
+      var teams = store.teams.map(function (x) { return x.name || 'ชุดปฏิบัติการ'; });
+      rows.slice(0, 300).forEach(function (r) {
+        var tr = document.createElement('tr');
+        function td(x, color) { var c = document.createElement('td'); if (typeof x === 'string' || typeof x === 'number') c.textContent = x; else c.appendChild(x); if (color) { c.style.color = color; c.style.fontWeight = 700; } tr.appendChild(c); return c; }
+        td(r.rank); td(V.LEVELS[r.level].short, V.LEVELS[r.level].color); td(r.name); td(r.house); td(r.moo); td(r.tambon);
+        td(r.access ? (r.access.key === 'car' ? 'รถทั่วไป' : r.access.key === 'boat' ? 'เรือ' : r.access.label) : '—', r.access && r.access.key !== 'car' ? r.access.color : null);
+        var sel = document.createElement('select'); sel.setAttribute('aria-label', 'สถานะการช่วยเหลือ ' + r.name);
+        Object.keys(V.STATUS).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = V.STATUS[k].label; sel.appendChild(o); });
+        sel.value = r.status.key;
+        var tsel = document.createElement('select'); tsel.setAttribute('aria-label', 'ชุดที่ไปช่วย ' + r.name);
+        [''].concat(teams).forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n || '—'; tsel.appendChild(o); });
+        tsel.value = r.statusTeam || '';
+        sel.onchange = function () { setStatus(r.id, sel.value, tsel.value); clearTimeout(helpTimer); helpTimer = setTimeout(function () { vulnRender(); drawAll(); }, 400); };
+        tsel.onchange = function () { setStatus(r.id, sel.value, tsel.value); clearTimeout(helpTimer); helpTimer = setTimeout(function () { vulnRender(); }, 400); };
+        td(sel); td(tsel);
+        td(r.statusAt ? new Date(r.statusAt).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+        t.appendChild(tr);
+      });
+    }
+    $('helpFilter').onchange = renderHelp;
+    $('helpSearch').oninput = function () { clearTimeout(helpTimer); helpTimer = setTimeout(renderHelp, 200); };
+
     // ---------- บัญชีกลุ่มเปราะบาง (ข้อมูลรายชื่อเก็บแยก เฉพาะเครื่องนี้) ----------
     var V = window.Vulnerable, VKEY = 'banpong-vulnerable-v1', vdata = null, vlist = [];
     try { vdata = JSON.parse(localStorage.getItem(VKEY) || 'null'); } catch (e) { vdata = null; }
@@ -907,13 +1102,26 @@
       return { depth: fcRes.depth[k] || 0, risk: !!(fcRes.risk && fcRes.risk[k]) };
     }
     var MOO_RIVER = (window.BANPONG_MOO_RIVER || { items: {} }).items;
-    // ค่าที่ผู้ใช้แก้ไข/ยืนยัน มาก่อนค่าประมาณเริ่มต้น
+    var VILL = (window.BANPONG_VILLAGES || { items: {} }).items;
+    // ตำแหน่งหมู่บ้าน: ที่ผู้ใช้ปักเอง มาก่อนค่าประมาณจากที่อยู่สถานที่
+    function pinAuto(key) { return !store.vuln.pins[key] && !!VILL[key]; }
+    function mergedPins() {
+      var o = {};
+      Object.keys(VILL).forEach(function (k) { o[k] = [VILL[k].lon, VILL[k].lat]; });
+      Object.keys(store.vuln.pins).forEach(function (k) { o[k] = store.vuln.pins[k]; });
+      return o;
+    }
+    // ที่ตั้งเทียบแม่น้ำ: ค่าที่ผู้ใช้แก้ไข/ยืนยัน → ค่าที่ตรวจด้วยมือ (banpong-moo-river.js) → ค่าประมาณจากตำแหน่งหมู่บ้าน
     function riverInfo(key) {
-      var o = store.vuln.river[key], d = MOO_RIVER[key];
+      var o = store.vuln.river[key], d = MOO_RIVER[key], vl = VILL[key];
+      if (!d && vl) d = { cls: vl.cls, km: vl.riverKm, ref: 'ประมาณจากสถานที่ ' + vl.n + ' แห่ง (' + vl.refs.join(', ') + ')' };
       if (o) return { cls: o.cls, confirmed: !!o.confirmed, def: d };
       return { cls: d ? d.cls : 'unknown', confirmed: false, def: d };
     }
-    function vulnAll() { return vdata ? V.prioritize(vdata.records, { tambons: store.vuln.tambons.length ? store.vuln.tambons : null, pins: store.vuln.pins, floodAt: vulnFloodAt, river: riverInfo }) : []; }
+    function vulnAll() {
+      return vdata ? V.prioritize(vdata.records, { tambons: store.vuln.tambons.length ? store.vuln.tambons : null, pins: mergedPins(), floodAt: vulnFloodAt,
+        river: riverInfo, access: accessFor, status: statusFor }) : [];
+    }
     function renderRiverTable() {
       var t = $('riverTable'); t.textContent = '';
       var h = document.createElement('tr');
@@ -969,12 +1177,14 @@
         var b = document.createElement('button'); b.type = 'button';
         b.textContent = 'ต.' + g.tambon + ' ม.' + g.moo + ' (' + g.total + (g.levels[1] ? ', ติดเตียง ' + g.levels[1] : '') + ')';
         if (store.vuln.pins[g.key]) b.classList.add('pinned');
+        else if (pinAuto(g.key)) b.textContent += ' ≈';
         if (g.key === store.vuln.active) b.classList.add('on');
-        b.title = store.vuln.pins[g.key] ? 'ปักตำแหน่งแล้ว — คลิกเพื่อเลือก แล้วปักใหม่ได้' : 'ยังไม่ปักตำแหน่ง';
+        b.title = store.vuln.pins[g.key] ? 'ปักตำแหน่งแล้ว — คลิกเพื่อเลือก แล้วปักใหม่ได้' : pinAuto(g.key) ? 'ตำแหน่งประมาณจากที่อยู่สถานที่ (≈) — ปักใหม่ให้ตรงได้' : 'ยังไม่ปักตำแหน่ง';
         b.onclick = function () { store.vuln.active = g.key; save(); vulnRender(); msg('เลือก ต.' + g.tambon + ' ม.' + g.moo + ' — ใช้เครื่องมือ “ปักตำแหน่งหมู่บ้าน” แล้วคลิกบนแผนที่'); };
         host.appendChild(b);
       });
       renderRiverTable();
+      renderHelp();
       // หน้า
       var sel = $('vulnPage'), n = V.pageCount(vlist), cur = Math.min(+sel.value || 0, n - 1);
       sel.textContent = '';
@@ -1030,8 +1240,9 @@
     };
     twoStepDelete($('vulnClear'), function () {
       vdata = null; vlist = [];
-      try { localStorage.removeItem(VKEY); } catch (e) { /* */ }
-      $('vulnStatus').textContent = 'ลบรายชื่อออกจากเครื่องนี้แล้ว (ตำแหน่งหมู่บ้านยังเก็บไว้)';
+      vstatus = {};
+      try { localStorage.removeItem(VKEY); localStorage.removeItem(SKEY); } catch (e) { /* */ }
+      $('vulnStatus').textContent = 'ลบรายชื่อและสถานะการช่วยเหลือออกจากเครื่องนี้แล้ว (ตำแหน่งหมู่บ้านยังเก็บไว้)';
       vulnRender(); drawAll();
     });
     $('vulnShow').onchange = function () { store.vuln.show = this.checked; save(); drawAll(); };
@@ -1070,15 +1281,138 @@
       return {
         stats: stats, colors: V.LEVELS.map(function (l) { return l && l.color; }), names: V.LEVELS.map(function (l) { return l && l.short; }),
         pins: groups.filter(function (g) { return g.pin; }).map(function (g) {
-          return { lon: g.pin[0], lat: g.pin[1], label: 'ม.' + g.moo + (g.river.key === 'river' ? ' ริมน้ำ' : ''), total: g.total, levels: g.levels, color: V.LEVELS[g.top].color, tambon: g.tambon, flooded: g.flood.key === 'flooded' };
+          var ac = g.access && g.access.key !== 'car' ? (g.access.key === 'boat' ? 'ต้องใช้เรือ' : g.access.label) : '';
+          return { lon: g.pin[0], lat: g.pin[1], label: 'ม.' + g.moo + (pinAuto(g.key) ? '≈' : '') + (g.river.key === 'river' ? ' ริมน้ำ' : ''), access: ac, total: g.total, levels: g.levels, color: V.LEVELS[g.top].color, tambon: g.tambon, flooded: g.flood.key === 'flooded' };
         })
       };
     }
 
+    // ---------- รายงานสถานการณ์ประจำวัน (SITREP) — ตัวเลขรวม ไม่มีรายชื่อบุคคล ----------
+    var SFONT = '"Sarabun","Noto Sans Thai","Leelawadee UI",Tahoma,sans-serif', sitTimer = 0;
+    function sitInputs() {
+      [['sitUnit', 'unit'], ['sitBy', 'by'], ['sitPeriod', 'period'], ['sitDone', 'done'], ['sitNeed', 'need'], ['sitNext', 'next']].forEach(function (p) {
+        var el = $(p[0]); el.value = store.sitrep[p[1]] || '';
+        el.oninput = function () { store.sitrep[p[1]] = el.value; save(); sitSoon(); };
+      });
+    }
+    function sitSoon() { clearTimeout(sitTimer); sitTimer = setTimeout(function () { renderSitrep($('sitCanvas')); }, 300); }
+    function wrapText(ctx, text, x, y, maxW, lh, maxLines) {
+      var lines = 0;
+      String(text || '').split('\n').forEach(function (para) {
+        // ภาษาไทยไม่มีช่องว่างระหว่างคำ: ตัดตามความกว้างทีละตัวอักษรเมื่อจำเป็น
+        var chars = Array.from(para), line = '';
+        chars.forEach(function (ch) {
+          if (maxLines && lines >= maxLines) return;
+          if (ctx.measureText(line + ch).width > maxW && line) { ctx.fillText(line, x, y); y += lh; lines++; line = ch.trim() ? ch : ''; }
+          else line += ch;
+        });
+        if (line && !(maxLines && lines >= maxLines)) { ctx.fillText(line, x, y); y += lh; lines++; }
+      });
+      return y;
+    }
+    function renderSitrep(cv) {
+      if (!cv || !fcRes) return;
+      var ctx = cv.getContext('2d'), W = cv.width, H = cv.height, P = 40, f = store.forecast, sr = store.sitrep, r = fcRes;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+      ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#0d47a1'; ctx.fillRect(0, 0, W, 92);
+      ctx.fillStyle = '#fff'; ctx.font = '700 32px ' + SFONT;
+      ctx.fillText('รายงานสถานการณ์อุทกภัย อ.บ้านโป่ง จ.ราชบุรี' + (sr.unit ? ' — ' + sr.unit : ''), P, 46);
+      ctx.font = '500 18px ' + SFONT;
+      ctx.fillText('ณ ' + new Date().toLocaleString('th-TH', { dateStyle: 'full', timeStyle: 'short' }) + (sr.period ? ' · ช่วง ' + sr.period : '') + (sr.by ? ' · ผู้รายงาน ' + sr.by : ''), P, 76);
+      var LX = P, LW = 960, RX = LX + LW + 30, RW = W - RX - P, y = 128;
+      function head(t, x, yy, w) { ctx.fillStyle = '#0d47a1'; ctx.fillRect(x, yy - 22, 6, 28); ctx.fillStyle = '#1a1a1a'; ctx.font = '700 21px ' + SFONT; ctx.fillText(t, x + 14, yy); return yy + 30; }
+      function line(t, x, yy, w, font, color) { ctx.font = (font || '400 16px') + ' ' + SFONT; ctx.fillStyle = color || '#222'; return wrapText(ctx, t, x, yy, w, 22); }
+      // 1) สถานการณ์น้ำ
+      y = head('1. สถานการณ์น้ำ (สถานี K.55A สะพานค่ายหลวง)', LX, y, LW);
+      y = line('ระดับน้ำ ' + f.H.toFixed(2) + ' ม.รทก. · ตลิ่ง ' + r.bank.toFixed(2) + ' ม. · ' + (r.excess > 0 ? 'ล้นตลิ่ง ' + r.excess.toFixed(2) + ' ม.' : 'ต่ำกว่าตลิ่ง') +
+        ' · ปริมาณน้ำ ' + Math.round(f.Q).toLocaleString('en-US') + ' ลบ.ม./วินาที (ตลิ่งรับได้ 1,730)', LX + 14, y, LW - 14, '600 17px');
+      y = line('คาดการณ์พื้นที่ท่วม ' + Math.round(r.total.rai).toLocaleString('en-US') + ' ไร่ (' + (r.total.rai * 1600 / 1e6).toFixed(1) + ' ตร.กม.) · ลึกเฉลี่ย ' + r.total.meanD.toFixed(2) +
+        ' ม. · ความเสียหายประเมิน ~' + (r.total.damage / 1e6).toFixed(0) + ' ล้านบาท' + (r.total.drainRai >= 1 ? ' · น้ำย้อนท่อ/บึง ' + Math.round(r.total.drainRai) + ' ไร่' : '') +
+        ' (' + (f.mode === 'volume' ? 'ตามปริมาณน้ำล้น ' + f.hours + ' ชม.' : 'ขอบเขตสูงสุด') + ')', LX + 14, y, LW - 14);
+      var tb = r.tambons.filter(function (t) { return t.rai >= 1; }).sort(function (a, b) { return b.rai - a.rai; });
+      ctx.font = '700 14px ' + SFONT; ctx.fillStyle = '#555';
+      [['ตำบล', 0], ['พื้นที่ท่วม (ไร่)', 200], ['ชุมชน (ไร่)', 360], ['ลึกเฉลี่ย (ม.)', 490], ['ความเสียหาย (ล้านบาท)', 620], ['เริ่มท่วมที่ (ม.)', 820]].forEach(function (c) { ctx.fillText(c[0], LX + 14 + c[1], y + 4); });
+      y += 26;
+      tb.slice(0, 9).forEach(function (t) {
+        var i = r.tambons.indexOf(t);
+        ctx.font = '400 16px ' + SFONT; ctx.fillStyle = '#222';
+        [['ต.' + t.th, 0], [Math.round(t.rai).toLocaleString('en-US'), 200], [Math.round(t.groups.built).toLocaleString('en-US'), 360], [t.meanD.toFixed(2), 490],
+         [(t.damage / 1e6).toFixed(1), 620], [r.onset[i] != null ? r.onset[i].toFixed(2) : '—', 820]].forEach(function (c) { ctx.fillText(c[0], LX + 14 + c[1], y); });
+        y += 22;
+      });
+      if (tb.length > 9) { y = line('และอีก ' + (tb.length - 9) + ' ตำบล', LX + 14, y, LW, '400 14px', '#666'); }
+      var dry = r.tambons.filter(function (t, i) { return t.rai < 1 && r.onset[i] != null; }).map(function (t) { return 'ต.' + t.th + ' ~' + r.onset[r.tambons.indexOf(t)].toFixed(2); });
+      if (dry.length) y = line('ยังไม่ท่วม (เริ่มท่วมที่ระดับ ม.): ' + dry.join(' · '), LX + 14, y + 4, LW - 14, '400 14px', '#555');
+      y += 12;
+      // 2) เส้นทาง
+      y = head('2. เส้นทางและการเข้าถึง', LX, y, LW);
+      if (accRes) {
+        var a = accRes;
+        y = line('ถนนน้ำท่วม ' + a.wetKm.toFixed(0) + ' กม.: เก๋งยังผ่านได้ ' + a.lenBy[0].toFixed(0) + ' · เฉพาะกระบะขึ้นไป ' + a.lenBy[1].toFixed(0) + ' · เฉพาะรถยกสูง/รถทหาร ' + a.lenBy[2].toFixed(0) +
+          ' · เรือเท่านั้น ' + a.lenBy[3].toFixed(0) + ' กม. · ถนนแห้งที่ถูกตัดขาด ' + a.cutKm.toFixed(0) + ' กม.', LX + 14, y, LW - 14);
+        var boatV = a.villages.filter(function (v) { return v.access.key === 'boat'; }).map(function (v) { var k = v.key.split('|'); return 'ต.' + k[0] + ' ม.' + k[1]; });
+        var truckV = a.villages.filter(function (v) { return v.access.key === 'truck'; }).map(function (v) { var k = v.key.split('|'); return 'ต.' + k[0] + ' ม.' + k[1]; });
+        y = line('หมู่บ้านที่ต้องใช้เรือ (' + boatV.length + '): ' + (boatV.join(', ') || '—'), LX + 14, y, LW - 14, '600 16px', '#6a1b9a');
+        y = line('เฉพาะรถยกสูง/รถทหาร (' + truckV.length + '): ' + (truckV.join(', ') || '—'), LX + 14, y, LW - 14, '600 16px', '#c62828');
+      }
+      y += 12;
+      // 3) กลุ่มเปราะบาง (ตัวเลข)
+      y = head('3. กลุ่มเปราะบาง (' + (vlist.length ? vulnTitleParts().replace(' อ.บ้านโป่ง จ.ราชบุรี', '') : 'ยังไม่ได้นำเข้าทะเบียน') + ')', LX, y, LW);
+      if (vlist.length) {
+        var c = [0, 0, 0, 0, 0], dn = 0, fl = 0, boat = 0, bedOpen = 0, going = 0;
+        vlist.forEach(function (p) {
+          c[p.level]++; if (p.status.done) dn++; if (p.status.key === 'going') going++;
+          if (p.flood.key === 'flooded') fl++; if (p.access && p.access.key === 'boat') boat++;
+          if (p.level === 1 && !p.status.done) bedOpen++;
+        });
+        y = line('รวม ' + vlist.length + ' คน: ติดเตียง ' + c[1] + ' · ติดบ้าน/เคลื่อนไหว ' + c[2] + ' · สื่อสาร/จิต ' + c[3] + (c[4] ? ' · ไม่ระบุ ' + c[4] : ''), LX + 14, y, LW - 14, '600 17px');
+        y = line('ช่วยแล้ว ' + dn + ' คน · กำลังช่วย ' + going + ' · คงเหลือ ' + (vlist.length - dn) + ' คน (ติดเตียงคงเหลือ ' + bedOpen + ') · อยู่ในหมู่บ้านน้ำท่วม ' + fl + ' คน · ต้องใช้เรือ ' + boat + ' คน',
+          LX + 14, y, LW - 14, '600 17px', dn ? '#2e7d32' : '#c62828');
+        y = line('(ตัวเลขรวม ไม่มีรายชื่อบุคคล — รายชื่ออยู่ในบัญชีกลุ่มเปราะบางแยกต่างหาก)', LX + 14, y, LW - 14, '400 13px', '#777');
+      }
+      // ขวา: แผนที่ + ชุดปฏิบัติการ + ข้อความ
+      var ry = 110, allCv = cards.all && cards.all.cv;
+      if (allCv) {
+        var mh = RW * allCv.height / allCv.width;
+        ctx.drawImage(allCv, RX, ry, RW, mh); ctx.strokeStyle = '#bbb'; ctx.strokeRect(RX, ry, RW, mh); ry += mh + 34;
+      }
+      ry = head('4. ชุดปฏิบัติการ (' + store.teams.length + ' ชุด)', RX, ry, RW);
+      store.teams.slice(0, 6).forEach(function (t, i) {
+        var org = store.agencies.filter(function (a) { return a.id === t.agency; })[0];
+        ry = line((i + 1) + '. ' + (t.name || 'ชุดที่ ' + (i + 1)) + (org && org.name ? ' (' + org.name + ')' : '') + (t.staff ? ' · กำลังพล ' + t.staff : '') + (t.equipment ? ' · ' + t.equipment : '') +
+          ((t.tambons || []).length ? ' · ' + t.tambons.map(function (x) { return 'ต.' + x; }).join(' ') : ''), RX + 14, ry, RW - 14, '400 15px');
+      });
+      if (!store.teams.length) ry = line('—', RX + 14, ry, RW - 14);
+      ry += 8;
+      var sections = [['5. ผลการปฏิบัติ', sr.done], ['6. ปัญหา/ข้อขัดข้อง และความต้องการสนับสนุน', sr.need], ['7. แผนการปฏิบัติต่อไป / ข้อสั่งการ', sr.next]];
+      var yy = Math.max(y + 12, ry);
+      // ข้อความยาวไปไว้คอลัมน์ซ้ายใต้ข้อ 3 ถ้าพื้นที่ขวาไม่พอ
+      var colX = y + 12 < ry ? LX : RX, colW = colX === LX ? LW : RW, cyy = colX === LX ? y + 12 : ry;
+      sections.forEach(function (sec) {
+        if (!sec[1]) return;
+        cyy = head(sec[0], colX, cyy, colW);
+        ctx.font = '400 16px ' + SFONT; ctx.fillStyle = '#222';
+        cyy = wrapText(ctx, sec[1], colX + 14, cyy, colW - 14, 22, 6) + 10;
+      });
+      ctx.font = '400 12px ' + SFONT; ctx.fillStyle = '#777';
+      ctx.fillText('จัดทำด้วยระบบแผนที่ตำบล อ.บ้านโป่ง · ค่าคาดการณ์จากแบบจำลอง (DEM ดาวเทียม คลาดเคลื่อนได้ ±0.5–1 ม.) ใช้ประกอบการตัดสินใจ ควรยืนยันกับข้อมูลภาคสนาม', P, H - 16);
+    }
+    $('sitSave').onclick = function () {
+      renderSitrep($('sitCanvas'));
+      $('sitCanvas').toBlob(function (blob) {
+        var file = 'sitrep-banpong-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') + '.png';
+        saveViaViewer(file, blob, 'รายงาน ' + file).then(function (ok) {
+          if (ok) return;
+          var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+        });
+      }, 'image/png');
+    };
+
     function floodCfg() {
       if (!fcRes || !store.forecast.show) return null;
       return { image: fcImage, grid: FMETA, res: fcRes, H: store.forecast.H, Q: store.forecast.Q, riskM: store.forecast.risk, note: fcNote(),
-        drain: fcRes.total.drainRai >= 1 };
+        drain: fcRes.total.drainRai >= 1, roadText: store.access.show ? roadText() : '' };
     }
 
     // ---------------- วาด ----------------
@@ -1108,7 +1442,7 @@
           title: viewTitle(v), subtitle: v.fixed ? 'ทั้ง 15 ตำบล · แม่น้ำแม่กลอง' : 'แนวแม่น้ำแม่กลอง หน่วยงานรับผิดชอบ และชุดปฏิบัติการ',
           tiles: [], note: NOTE + (bgv === 'street' ? BASE_NOTE : ''),
           basemap: bgv === 'street' ? window.BANPONG_BASEMAP : null, colorMode: v.fixed ? store.allMode : (v.mode || 'plain'),
-          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg(), floodPoints: pointsCfg(), vuln: vulnPinsCfg() };
+          separate: store.separate, agencies: store.agencies, assign: store.assign, zones: store.zones, teams: store.teams, draft: v.draft, flood: floodCfg(), floodPoints: pointsCfg(), vuln: vulnPinsCfg(), roads: roadsCfg() };
         v.proj = TM.render(cfg);
         var list = Object.keys(cfg._used || {}).map(function (id) {
           var a = agencyById(id), u = cfg._used[id];
@@ -1118,7 +1452,7 @@
         c.assigns.textContent = (list.length ? 'หน่วยงานในภาพ — ' + list.join(' · ') : '') + (tlist.length ? (list.length ? '  |  ' : '') + 'ชุดปฏิบัติการ — ' + tlist.join(', ') : '');
       });
     }
-    function drawAll() { return Promise.all(allViews().map(draw)); }
+    function drawAll() { return Promise.all(allViews().map(draw)).then(function () { if (typeof sitSoon === 'function') sitSoon(); }); }
 
     // ---------------- บันทึกภาพ ----------------
     var downloadsP = window.claude && typeof window.claude.use === 'function'
@@ -1181,7 +1515,7 @@
         var v = JSON.parse(document.getElementById('dataText').value);
         if (!v || !Array.isArray(v.agencies)) throw new Error('ไม่พบรายการหน่วยงานในข้อความ');
         store = { agencies: v.agencies, assign: v.assign || {}, zones: v.zones || [], active: v.active, teams: v.teams || [], activeTeam: v.activeTeam,
-          views: v.views, separate: v.separate, allMode: v.allMode, forecast: v.forecast, vuln: v.vuln };
+          views: v.views, separate: v.separate, allMode: v.allMode, forecast: v.forecast, vuln: v.vuln, access: v.access, sitrep: v.sitrep };
         normalize(); save(); renderAll();
         dataMsg('นำเข้าข้อมูลแล้ว: ' + store.agencies.length + ' หน่วยงาน, ' + store.teams.length + ' ชุดปฏิบัติการ, ' + store.views.length + ' แผนที่เจาะจง');
       } catch (err) { dataMsg('นำเข้าไม่สำเร็จ: ' + err.message + ' — ตรวจว่าวางข้อความที่คัดลอกจากปุ่มส่งออกครบทั้งหมด'); }
@@ -1204,7 +1538,7 @@
         fcInputs(); $('obsRadius').value = store.forecast.obsRadius;
         applyScenario(); fcCompute(); renderPoints();
       }).then(function () { vulnRender(); return drawAll(); });
-      $('vulnShow').checked = store.vuln.show; $('vulnMask').checked = store.vuln.mask; vulnTambonChips(); vulnRender();
+      $('vulnShow').checked = store.vuln.show; $('vulnMask').checked = store.vuln.mask; vulnTambonChips(); vulnRender(); accInputs(); sitInputs();
     }
     load(); renderAll();
     // รอฟอนต์ Sarabun ก่อนวาดลงภาพ (ไม่เกิน 3 วินาที)
@@ -1215,6 +1549,7 @@
     window.tambonMap = {
       store: function () { return store; }, views: function () { return allViews(); }, draw: drawAll,
       forecast: function () { return fcRes; }, setLevel: function (h) { setH(h); },
+      access: function () { return accRes; }, vlist: function () { return vlist; }, setStatus: function (id, st, team) { setStatus(id, st, team); vulnRender(); },
       setTool: function (id, t) { setTool(allViews().filter(function (v) { return v.id === id; })[0], t); },
       finishDraft: function (id, label) { finishDraft(allViews().filter(function (v) { return v.id === id; })[0], label); }
     };
