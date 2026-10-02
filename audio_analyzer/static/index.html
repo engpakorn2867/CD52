@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ถอดเสียง & วิเคราะห์หัวข้อ</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+    --accent: #3b5bdb; --accent-soft: #e7ecff; --danger: #c92a2a; --hl: #fff4bf;
+    --s0: #3b5bdb; --s1: #d9480f; --s2: #2b8a3e; --s3: #ae3ec9; --s4: #0b7285; --s5: #c2255c; --s6: #5f3dc4; --s7: #846800;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --panel: #1b1f29; --text: #e6e9f0; --muted: #98a0b3; --line: #2c3241;
+      --accent: #7b93ff; --accent-soft: #252d4a; --danger: #ff6b6b; --hl: #3d3514;
+      --s0: #7b93ff; --s1: #ff922b; --s2: #51cf66; --s3: #da77f2; --s4: #3bc9db; --s5: #f06595; --s6: #9775fa; --s7: #fcc419;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.6 "Sarabun", "Noto Sans Thai", system-ui, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .engines { color: var(--muted); font-size: 13px; }
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .panel + .panel { margin-top: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input, select, button { font: inherit; color: inherit; }
+  a { color: inherit; text-decoration: none; }
+  input[type=text], input[type=number], select, input[type=search] {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 7px 12px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; width: 100%; margin-top: 14px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 22px 10px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over, .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--text); display: block; word-break: break-all; }
+  .jobs { list-style: none; margin: 0; padding: 0; }
+  .jobs li { padding: 8px 10px; border-radius: 7px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  .jobs li:hover, .jobs li.active { background: var(--accent-soft); }
+  .jobs .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .badge.error { color: var(--danger); }
+  .progress { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin: 10px 0; }
+  .progress > div { height: 100%; background: var(--accent); transition: width .4s; }
+  .empty { color: var(--muted); text-align: center; padding: 60px 10px; }
+  .player { position: sticky; top: 0; z-index: 5; background: var(--panel); padding: 10px 0; }
+  audio { width: 100%; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .toolbar input[type=search] { flex: 1; min-width: 180px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .note { background: var(--hl); padding: 8px 10px; border-radius: 7px; font-size: 13px; margin-top: 10px; }
+  .speakers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .speaker { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .speaker input { border: none; background: transparent; font-weight: 600; padding: 0; color: var(--sc); }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); margin-top: 6px; }
+  .bar > div { height: 100%; border-radius: 3px; background: var(--sc); }
+  .toc { margin: 0; padding-left: 0; list-style: none; counter-reset: t; }
+  .toc li { padding: 6px 8px; border-radius: 6px; cursor: pointer; display: flex; gap: 10px; }
+  .toc li:hover, .toc li.current { background: var(--accent-soft); }
+  .toc .time { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 52px; }
+  .topic { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
+  .topic h3 { margin: 0 0 4px; font-size: 16px; }
+  .topic .summary { color: var(--muted); margin: 4px 0 8px; }
+  .topic ul { margin: 4px 0 10px; padding-left: 20px; }
+  .utt { display: grid; grid-template-columns: 56px 1fr; gap: 10px; padding: 6px 8px; border-radius: 6px; }
+  .utt.playing { background: var(--hl); }
+  .utt .time { color: var(--muted); font-size: 12px; cursor: pointer; padding-top: 3px; font-variant-numeric: tabular-nums; }
+  .utt .time:hover { color: var(--accent); }
+  .utt .who { font-weight: 600; color: var(--sc); margin-right: 6px; }
+  .hidden { display: none !important; }
+  mark { background: var(--hl); color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙️ ถอดเสียง · แยกผู้พูด · แยกหัวข้อ</h1>
+  <span class="engines" id="engines"></span>
+</header>
+
+<div class="layout">
+  <aside>
+    <form class="panel" id="uploadForm">
+      <h2>อัปโหลดไฟล์เสียง</h2>
+      <div class="drop" id="drop">
+        ลากไฟล์มาวาง หรือคลิกเพื่อเลือก
+        <small style="display:block">mp3, wav, m4a, mp4, ogg, webm …</small>
+        <strong id="fileName"></strong>
+      </div>
+      <input type="file" id="file" accept="audio/*,video/*" hidden>
+
+      <label for="language">ภาษา</label>
+      <select id="language">
+        <option value="th">ไทย</option>
+        <option value="">ตรวจจับอัตโนมัติ</option>
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+      </select>
+
+      <label>จำนวนผู้พูด (เว้นว่าง = ให้ระบบเดา)</label>
+      <div class="row">
+        <input type="number" id="numSpeakers" min="1" max="20" placeholder="แน่นอน">
+        <input type="number" id="minSpeakers" min="1" max="20" placeholder="อย่างน้อย">
+        <input type="number" id="maxSpeakers" min="1" max="20" placeholder="ไม่เกิน">
+      </div>
+
+      <label for="topicEngine">วิธีแยกหัวข้อ</label>
+      <select id="topicEngine">
+        <option value="auto">อัตโนมัติ</option>
+        <option value="claude">Claude (สรุปละเอียด ต้องมี API key)</option>
+        <option value="local">ในเครื่อง (ออฟไลน์)</option>
+      </select>
+
+      <label for="whisperModel">โมเดลถอดเสียง</label>
+      <select id="whisperModel">
+        <option value="">ค่าเริ่มต้นของเซิร์ฟเวอร์</option>
+        <option value="large-v3">large-v3 (แม่นที่สุด ช้า)</option>
+        <option value="large-v3-turbo">large-v3-turbo (แม่น เร็วกว่า)</option>
+        <option value="medium">medium</option>
+        <option value="small">small (เร็ว)</option>
+      </select>
+
+      <label><input type="checkbox" id="diarize" checked> แยกผู้พูด</label>
+      <button class="primary" id="submit" disabled>เริ่มวิเคราะห์</button>
+    </form>
+
+    <div class="panel">
+      <h2>งานทั้งหมด</h2>
+      <ul class="jobs" id="jobs"></ul>
+    </div>
+  </aside>
+
+  <main class="panel" id="main">
+    <div class="empty">อัปโหลดไฟล์เสียงเพื่อเริ่มต้น หรือเลือกงานจากรายการด้านซ้าย</div>
+  </main>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = sec => { sec = Math.floor(sec || 0); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : String(m).padStart(2, "0")) + ":" + String(s).padStart(2, "0"); };
+const STATUS = { queued: "รอคิว", running: "กำลังทำ", done: "เสร็จ", error: "ผิดพลาด" };
+
+let currentId = null, pollTimer = null, result = null, speakerColor = {};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) { let msg = r.statusText; try { msg = (await r.json()).detail || msg; } catch {} throw new Error(msg); }
+  return r.json();
+}
+
+// ---------- upload ----------
+const fileInput = $("#file"), drop = $("#drop");
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); fileInput.files = e.dataTransfer.files; onFile(); };
+fileInput.onchange = onFile;
+function onFile() { $("#fileName").textContent = fileInput.files[0]?.name || ""; $("#submit").disabled = !fileInput.files[0]; }
+
+$("#uploadForm").onsubmit = async e => {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  fd.append("language", $("#language").value);
+  for (const [id, key] of [["numSpeakers","num_speakers"],["minSpeakers","min_speakers"],["maxSpeakers","max_speakers"]])
+    if ($("#" + id).value) fd.append(key, $("#" + id).value);
+  fd.append("diarize", $("#diarize").checked);
+  fd.append("topic_engine", $("#topicEngine").value);
+  fd.append("whisper_model", $("#whisperModel").value);
+  $("#submit").disabled = true; $("#submit").textContent = "กำลังอัปโหลด…";
+  try {
+    const job = await api("/api/jobs", { method: "POST", body: fd });
+    fileInput.value = ""; onFile();
+    await loadJobs(); openJob(job.id);
+  } catch (err) { alert("อัปโหลดไม่สำเร็จ: " + err.message); }
+  $("#submit").textContent = "เริ่มวิเคราะห์"; $("#submit").disabled = !fileInput.files[0];
+};
+
+// ---------- job list ----------
+async function loadJobs() {
+  const jobs = await api("/api/jobs");
+  $("#jobs").innerHTML = jobs.map(j => `<li data-id="${j.id}" class="${j.id === currentId ? "active" : ""}">
+      <span class="name" title="${esc(j.filename)}">${esc(j.filename)}</span>
+      <span class="badge ${j.status === "error" ? "error" : ""}">${STATUS[j.status]}${j.status === "running" ? " " + Math.round(j.progress * 100) + "%" : ""}</span></li>`).join("")
+    || `<li class="badge">ยังไม่มีงาน</li>`;
+  $("#jobs").querySelectorAll("li[data-id]").forEach(li => li.onclick = () => openJob(li.dataset.id));
+}
+
+async function openJob(id) {
+  currentId = id; clearTimeout(pollTimer);
+  document.querySelectorAll("#jobs li").forEach(li => li.classList.toggle("active", li.dataset.id === id));
+  const job = await api("/api/jobs/" + id);
+  if (job.status === "done") { result = job.result; renderResult(job); }
+  else renderStatus(job);
+  if (job.status === "queued" || job.status === "running") pollTimer = setTimeout(() => { loadJobs(); openJob(id); }, 1500);
+}
+
+function renderStatus(job) {
+  $("#main").innerHTML = `<h2>${esc(job.filename)}</h2>` + (job.status === "error"
+    ? `<p style="color:var(--danger)">เกิดข้อผิดพลาด: ${esc(job.error)}</p><button id="del">ลบงานนี้</button>`
+    : `<p>${esc(job.stage)}…</p><div class="progress"><div style="width:${job.progress * 100}%"></div></div>
+       <p class="meta">ครั้งแรกระบบต้องดาวน์โหลดโมเดล อาจใช้เวลาหลายนาที</p>`);
+  const del = $("#del"); if (del) del.onclick = () => deleteJob(job.id);
+}
+
+async function deleteJob(id) {
+  if (!confirm("ลบงานนี้และไฟล์เสียงที่อัปโหลด?")) return;
+  await api("/api/jobs/" + id, { method: "DELETE" });
+  currentId = null; $("#main").innerHTML = `<div class="empty">ลบแล้ว</div>`; loadJobs();
+}
+
+// ---------- result ----------
+function renderResult(job) {
+  speakerColor = {};
+  result.speakers.forEach((s, i) => speakerColor[s.name] = `var(--s${i % 8})`);
+  const byId = Object.fromEntries(result.utterances.map(u => [u.id, u]));
+  const notes = (result.engines.notes || []).map(n => `<div class="note">⚠️ ${esc(n)}</div>`).join("");
+
+  $("#main").innerHTML = `
+    <div class="player">
+      <h2 style="margin-bottom:2px">${esc(result.filename)}</h2>
+      <div class="meta">ยาว ${fmt(result.duration)} · ภาษา ${esc(result.language)} · ${result.speakers.length} ผู้พูด · ${result.topics.length} หัวข้อ
+        · ถอดเสียง: ${esc(result.engines.transcription)} · แยกผู้พูด: ${esc(result.engines.diarization)} · หัวข้อ: ${esc(result.engines.topics)}</div>
+      <audio id="audio" controls preload="metadata" src="/api/jobs/${job.id}/audio"></audio>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="ค้นหาในบทสนทนา…">
+        ${["md","txt","srt","json"].map(f => `<a href="/api/jobs/${job.id}/export/${f}"><button type="button">⬇ ${f.toUpperCase()}</button></a>`).join("")}
+        <button type="button" id="del">ลบ</button>
+      </div>
+    </div>
+    ${notes}
+    ${result.overall_summary ? `<h2 style="margin-top:16px">สรุปภาพรวม</h2><p>${esc(result.overall_summary)}</p>` : ""}
+
+    <h2 style="margin-top:16px">ผู้พูด <span class="meta">(คลิกชื่อเพื่อแก้ไข · ตั้งชื่อซ้ำกันเพื่อรวมผู้พูด)</span></h2>
+    <div class="speakers">${result.speakers.map(s => `
+      <div class="speaker" style="--sc:${speakerColor[s.name]}">
+        <input value="${esc(s.name)}" data-old="${esc(s.name)}">
+        <div class="meta">พูด ${fmt(s.talk_time)} · ${s.share}% · ${s.turns} ครั้ง</div>
+        <div class="bar"><div style="width:${s.share}%"></div></div>
+      </div>`).join("")}</div>
+
+    <h2 style="margin-top:16px">หัวข้อทั้งหมด</h2>
+    <ol class="toc">${result.topics.map(t => `
+      <li data-topic="${t.id}" data-start="${t.start}"><span class="time">${fmt(t.start)}</span><span>${t.id + 1}. ${esc(t.title)}</span></li>`).join("")}</ol>
+
+    <div id="transcript">${result.topics.map(t => `
+      <section class="topic" id="topic-${t.id}">
+        <h3>${t.id + 1}. ${esc(t.title)} <span class="meta">${fmt(t.start)}–${fmt(t.end)} · ${t.speakers.map(esc).join(", ")}</span></h3>
+        ${t.summary ? `<p class="summary">${esc(t.summary)}</p>` : ""}
+        ${t.key_points?.length ? `<ul>${t.key_points.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : ""}
+        ${t.utterance_ids.map(id => byId[id]).map(u => `
+          <div class="utt" data-id="${u.id}" data-start="${u.start}" data-end="${u.end}" style="--sc:${speakerColor[u.speaker]}">
+            <span class="time" data-start="${u.start}">${fmt(u.start)}</span>
+            <div><span class="who">${esc(u.speaker)}</span><span class="text">${esc(u.text)}</span></div>
+          </div>`).join("")}
+      </section>`).join("")}</div>`;
+
+  const audio = $("#audio");
+  const seek = t => { audio.currentTime = +t; audio.play(); };
+  document.querySelectorAll(".utt .time").forEach(el => el.onclick = () => seek(el.dataset.start));
+  document.querySelectorAll(".toc li").forEach(li => li.onclick = () => {
+    $("#topic-" + li.dataset.topic).scrollIntoView({ behavior: "smooth", block: "start" }); seek(li.dataset.start); });
+  $("#del").onclick = () => deleteJob(job.id);
+
+  // highlight what is playing
+  const utts = [...document.querySelectorAll(".utt")], tocItems = [...document.querySelectorAll(".toc li")];
+  let last = null;
+  audio.ontimeupdate = () => {
+    const t = audio.currentTime;
+    const cur = utts.find(u => t >= +u.dataset.start && t <= +u.dataset.end + 0.3);
+    if (cur !== last) { last?.classList.remove("playing"); cur?.classList.add("playing"); last = cur; }
+    const topic = result.topics.findLast(tp => t >= tp.start);
+    tocItems.forEach(li => li.classList.toggle("current", topic && +li.dataset.topic === topic.id));
+  };
+
+  // search
+  $("#search").oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    utts.forEach(el => {
+      const u = byId[el.dataset.id], txt = $(".text", el);
+      const hit = !q || u.text.toLowerCase().includes(q) || u.speaker.toLowerCase().includes(q);
+      el.classList.toggle("hidden", !hit);
+      txt.innerHTML = q && hit ? esc(u.text).replace(new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), m => `<mark>${m}</mark>`) : esc(u.text);
+    });
+    document.querySelectorAll(".topic").forEach(sec => sec.classList.toggle("hidden", !!q && !sec.querySelector(".utt:not(.hidden)")));
+  };
+
+  // rename speakers
+  document.querySelectorAll(".speaker input").forEach(inp => inp.onchange = async () => {
+    const names = { [inp.dataset.old]: inp.value };
+    try { result = await api(`/api/jobs/${job.id}/speakers`, { method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ names }) });
+      renderResult(job); } catch (err) { alert(err.message); }
+  });
+}
+
+api("/api/health").then(h => {
+  $("#engines").textContent = `Whisper: ${h.whisper_model} · แยกผู้พูด: ${h.diarization ? "พร้อม" : "ยังไม่ตั้ง HF_TOKEN"} · Claude: ${h.claude ? "พร้อม" : "ไม่ได้ตั้งค่า (ใช้แบบออฟไลน์)"}`;
+}).catch(() => {});
+loadJobs();
+</script>
+</body>
+</html>
